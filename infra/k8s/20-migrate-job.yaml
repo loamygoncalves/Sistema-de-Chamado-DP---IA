@@ -1,0 +1,21 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: beep-backend-migrate
+  namespace: beep-ai-service-desk
+  labels:
+    app: beep-backend-migrate
+spec:
+  backoffLimit: 3
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: migrate
+          image: registry.beepsaude.com.br/beep-ai-service-desk/backend:latest
+          command: ["alembic", "upgrade", "head"]
+          envFrom:
+            - configMapRef:
+                name: beep-backend-config
+            - secretRef:
+                name: beep-backend-secrets

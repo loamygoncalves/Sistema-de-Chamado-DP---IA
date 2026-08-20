@@ -1,0 +1,48 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: beep-worker
+  namespace: beep-ai-service-desk
+  labels:
+    app: beep-worker
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: beep-worker
+  template:
+    metadata:
+      labels:
+        app: beep-worker
+    spec:
+      containers:
+        - name: worker
+          image: registry.beepsaude.com.br/beep-ai-service-desk/backend-worker:latest
+          envFrom:
+            - configMapRef:
+                name: beep-backend-config
+            - secretRef:
+                name: beep-backend-secrets
+          resources:
+            requests: { cpu: "250m", memory: "512Mi" }
+            limits: { cpu: "1", memory: "1Gi" }
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: beep-worker-hpa
+  namespace: beep-ai-service-desk
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: beep-worker
+  minReplicas: 2
+  maxReplicas: 8
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 75

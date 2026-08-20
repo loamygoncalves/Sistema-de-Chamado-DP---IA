@@ -1,0 +1,76 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: beep-backend
+  namespace: beep-ai-service-desk
+  labels:
+    app: beep-backend
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: beep-backend
+  template:
+    metadata:
+      labels:
+        app: beep-backend
+    spec:
+      containers:
+        - name: backend
+          image: registry.beepsaude.com.br/beep-ai-service-desk/backend:latest
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: beep-backend-config
+            - secretRef:
+                name: beep-backend-secrets
+          readinessProbe:
+            httpGet: { path: /health, port: 8000 }
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /health, port: 8000 }
+            initialDelaySeconds: 20
+            periodSeconds: 20
+          resources:
+            requests: { cpu: "250m", memory: "512Mi" }
+            limits: { cpu: "1", memory: "1Gi" }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: beep-backend
+  namespace: beep-ai-service-desk
+spec:
+  selector:
+    app: beep-backend
+  ports:
+    - port: 8000
+      targetPort: 8000
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: beep-backend-hpa
+  namespace: beep-ai-service-desk
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: beep-backend
+  minReplicas: 3
+  maxReplicas: 12
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 75

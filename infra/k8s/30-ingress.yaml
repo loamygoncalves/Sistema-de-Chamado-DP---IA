@@ -1,0 +1,34 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: beep-ai-service-desk
+  namespace: beep-ai-service-desk
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-internal-ca
+    nginx.ingress.kubernetes.io/proxy-body-size: "25m"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/rate-limit-rps: "50"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - operacoes-playground.internal.beepsaude.com.br
+      secretName: beep-ai-service-desk-tls
+  rules:
+    - host: operacoes-playground.internal.beepsaude.com.br
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: beep-backend
+                port:
+                  number: 8000
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: beep-frontend
+                port:
+                  number: 3000
