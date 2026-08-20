@@ -41,11 +41,11 @@ flowchart TB
         PG[("PostgreSQL<br/>tickets, usuários, KB, auditoria")]
         Redis[("Redis<br/>cache + fila Celery")]
         Qdrant[("Qdrant<br/>vetores da base de conhecimento")]
-        Blob[("Object Storage<br/>anexos, PDFs, DOCX, XLSX, CSV")]
+        Blob[("Object Storage<br/>anexos, PDFs, DOCX, XLSX, CSV, PPTX")]
     end
 
     subgraph Workers["Workers assíncronos (Celery)"]
-        Ingest["Ingestion Worker<br/>(PDF/DOCX/XLSX/CSV → chunks → embeddings)"]
+        Ingest["Ingestion Worker<br/>(PDF/DOCX/XLSX/CSV/PPTX → chunks → embeddings)"]
         Learn["Continuous Learning Worker<br/>(resumo de chamado encerrado → artigo KB)"]
         Notify["Notification Worker<br/>(SLA, e-mail, webhook)"]
     end
@@ -136,7 +136,7 @@ flowchart LR
 | Banco relacional | PostgreSQL 16 | Tickets, usuários, KB, auditoria, configuração |
 | Cache/Fila | Redis 7 | Cache de sessão/consultas, broker Celery |
 | Vetorial | Qdrant | Embeddings de documentos, FAQs, artigos, chamados encerrados |
-| Object storage | S3-compatible (MinIO em dev) | Anexos e documentos-fonte (PDF/DOCX/XLSX/CSV) |
+| Object storage | S3-compatible (MinIO em dev) | Anexos e documentos-fonte (PDF/DOCX/XLSX/CSV/PPTX) |
 | Workers | Celery + Redis | Ingestão de documentos, aprendizado contínuo, notificações de SLA |
 | Observabilidade | OpenTelemetry + Prometheus/Grafana + Loki | Métricas, tracing, logs centralizados |
 

@@ -2,11 +2,12 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Numeric, String, Text
+from sqlalchemy import DateTime, ForeignKey, Numeric, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
+from app.models.enum_types import pg_enum
 from app.models.enums import ChatRole
 from app.models.mixins import TimestampMixin, UUIDPKMixin
 
@@ -24,7 +25,7 @@ class ChatMessage(Base, UUIDPKMixin):
     __tablename__ = "chat_messages"
 
     conversation_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("chat_conversations.id"))
-    role: Mapped[ChatRole] = mapped_column(Enum(ChatRole, name="chat_role"))
+    role: Mapped[ChatRole] = mapped_column(pg_enum(ChatRole, "chat_role"))
     content: Mapped[str] = mapped_column(Text)
     confidence_score: Mapped[Decimal | None] = mapped_column(Numeric(5, 2), nullable=True)
     sources: Mapped[list | None] = mapped_column(JSONB, nullable=True)

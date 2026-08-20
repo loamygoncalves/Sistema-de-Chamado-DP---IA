@@ -100,7 +100,7 @@ Ações: `criado`, `assumido`, `transferido`, `prioridade_alterada`, `comentario
 `id, question, answer, department_id FK NULLABLE, vector_id, is_active, created_at`.
 
 ### `documents`
-`id, filename, file_type ENUM(pdf,docx,xlsx,csv), department_id FK NULLABLE,
+`id, filename, file_type ENUM(pdf,docx,xlsx,csv,pptx), department_id FK NULLABLE,
 storage_path, checksum, indexed_at NULLABLE, chunk_count, uploaded_by FK users,
 created_at`.
 

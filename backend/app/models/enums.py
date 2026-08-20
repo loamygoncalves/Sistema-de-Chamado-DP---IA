@@ -42,6 +42,7 @@ class DocumentType(str, enum.Enum):
     DOCX = "docx"
     XLSX = "xlsx"
     CSV = "csv"
+    PPTX = "pptx"
 
 
 class ChatRole(str, enum.Enum):

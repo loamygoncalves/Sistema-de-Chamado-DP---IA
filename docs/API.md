@@ -58,7 +58,7 @@ Resposta de `POST /messages`:
 | POST | `/knowledge/articles` | Cria artigo manual | analyst+ |
 | GET | `/knowledge/faqs` | Lista FAQs | employee+ |
 | POST | `/knowledge/faqs` | Cria FAQ | admin |
-| POST | `/knowledge/documents` | Upload de documento (PDF/DOCX/XLSX/CSV) para ingestão | admin |
+| POST | `/knowledge/documents` | Upload de documento (PDF/DOCX/XLSX/CSV/PPTX) para ingestão | admin |
 | GET | `/knowledge/documents/{id}` | Status de indexação | admin |
 
 ## Departamentos

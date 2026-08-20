@@ -32,6 +32,8 @@ def upgrade() -> None:
     bind = op.get_bind()
     for e in (user_role, ticket_priority, ticket_status, ticket_source, knowledge_source_type, document_type, chat_role):
         e.create(bind, checkfirst=True)
+        # Evita que op.create_table tente recriar o tipo ao usá-lo como tipo de coluna abaixo.
+        e.create_type = False
 
     op.create_table(
         "departments",

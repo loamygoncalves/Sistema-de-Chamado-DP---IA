@@ -1,11 +1,12 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Integer, SmallInteger, String, Text
+from sqlalchemy import DateTime, ForeignKey, Integer, SmallInteger, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
+from app.models.enum_types import pg_enum
 from app.models.enums import TicketPriority, TicketSource, TicketStatus
 from app.models.mixins import TimestampMixin, UUIDPKMixin
 
@@ -23,16 +24,16 @@ class Ticket(Base, UUIDPKMixin, TimestampMixin):
     subject: Mapped[str] = mapped_column(String(255))
     description: Mapped[str] = mapped_column(Text)
     priority: Mapped[TicketPriority] = mapped_column(
-        Enum(TicketPriority, name="ticket_priority"), default=TicketPriority.MEDIA
+        pg_enum(TicketPriority, "ticket_priority"), default=TicketPriority.MEDIA
     )
     status: Mapped[TicketStatus] = mapped_column(
-        Enum(TicketStatus, name="ticket_status"), default=TicketStatus.NOVO
+        pg_enum(TicketStatus, "ticket_status"), default=TicketStatus.NOVO
     )
     sla_due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     assigned_to: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id"), nullable=True
     )
-    source: Mapped[TicketSource] = mapped_column(Enum(TicketSource, name="ticket_source"), default=TicketSource.MANUAL)
+    source: Mapped[TicketSource] = mapped_column(pg_enum(TicketSource, "ticket_source"), default=TicketSource.MANUAL)
     origin_conversation_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("chat_conversations.id"), nullable=True
     )

@@ -1,20 +1,24 @@
+import asyncio
 import os
 import uuid
+from pathlib import Path
 from typing import AsyncIterator
 
 import pytest
 import pytest_asyncio
+from alembic.config import Config
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import create_engine, select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
+from alembic import command
 
 os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://beep:beep@localhost:5432/beep_service_desk_test")
 os.environ.setdefault("JWT_SECRET_KEY", "test-secret")
 os.environ.setdefault("ANTHROPIC_API_KEY", "test")
 os.environ.setdefault("OPENAI_API_KEY", "test")
 
-import app.models  # noqa: E402,F401 — garante que todos os modelos estão registrados no Base.metadata
 from app.core.deps import get_current_user  # noqa: E402
-from app.db.base import Base  # noqa: E402
 from app.db.session import get_db  # noqa: E402
 from app.main import app  # noqa: E402
 from app.models.department import Department  # noqa: E402
@@ -22,6 +26,7 @@ from app.models.enums import UserRole  # noqa: E402
 from app.models.user import User  # noqa: E402
 
 TEST_DATABASE_URL = os.environ["DATABASE_URL"]
+BACKEND_ROOT = Path(__file__).resolve().parent.parent
 
 
 @pytest.fixture
@@ -29,12 +34,29 @@ def anyio_backend():
     return "asyncio"
 
 
+def _run_migrations_head() -> None:
+    """Roda as migrações reais do Alembic contra o banco de teste (sync, chamado
+    via to_thread) — garante que os testes exercitam o mesmo schema que produção,
+    em vez de um schema derivado direto dos modelos (Base.metadata.create_all),
+    que já mascarou uma incompatibilidade real entre enum e o tipo do Postgres."""
+    sync_url = TEST_DATABASE_URL.replace("postgresql+asyncpg://", "postgresql+psycopg2://")
+    reset_engine = create_engine(sync_url.rsplit("/", 1)[0] + "/postgres", isolation_level="AUTOCOMMIT")
+    db_name = sync_url.rsplit("/", 1)[1]
+    with reset_engine.connect() as conn:
+        conn.execute(text(f'DROP DATABASE IF EXISTS "{db_name}"'))
+        conn.execute(text(f'CREATE DATABASE "{db_name}"'))
+    reset_engine.dispose()
+
+    cfg = Config(str(BACKEND_ROOT / "alembic.ini"))
+    cfg.set_main_option("script_location", str(BACKEND_ROOT / "alembic"))
+    cfg.set_main_option("sqlalchemy.url", TEST_DATABASE_URL)
+    command.upgrade(cfg, "head")
+
+
 @pytest_asyncio.fixture
 async def db_engine():
+    await asyncio.to_thread(_run_migrations_head)
     engine = create_async_engine(TEST_DATABASE_URL)
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
-        await conn.run_sync(Base.metadata.create_all)
     yield engine
     await engine.dispose()
 
@@ -48,11 +70,10 @@ async def db_session(db_engine) -> AsyncIterator[AsyncSession]:
 
 @pytest_asyncio.fixture
 async def department(db_session: AsyncSession) -> Department:
-    dept = Department(name="Férias", slug="ferias", default_sla_hours=48)
-    db_session.add(dept)
-    await db_session.commit()
-    await db_session.refresh(dept)
-    return dept
+    # A migração 0002 já semeia os departamentos reais (inclusive "ferias") —
+    # reaproveitamos o mesmo registro em vez de criar um duplicado.
+    result = await db_session.execute(select(Department).where(Department.slug == "ferias"))
+    return result.scalar_one()
 
 
 @pytest_asyncio.fixture

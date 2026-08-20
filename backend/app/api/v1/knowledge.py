@@ -56,7 +56,9 @@ async def upload_document(
     try:
         file_type = DocumentType(extension)
     except ValueError as exc:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Formato não suportado. Use PDF, DOCX, XLSX ou CSV.") from exc
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, "Formato não suportado. Use PDF, DOCX, XLSX, CSV ou PPTX."
+        ) from exc
 
     content = await file.read()
     document = await knowledge_service.ingest_document(

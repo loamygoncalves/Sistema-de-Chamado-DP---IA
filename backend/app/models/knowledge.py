@@ -1,11 +1,12 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import ARRAY, Boolean, DateTime, Enum, ForeignKey, Integer, String, Text
+from sqlalchemy import ARRAY, Boolean, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
+from app.models.enum_types import pg_enum
 from app.models.enums import DocumentType, KnowledgeSourceType
 from app.models.mixins import TimestampMixin, UUIDPKMixin
 
@@ -14,7 +15,7 @@ class Document(Base, UUIDPKMixin, TimestampMixin):
     __tablename__ = "documents"
 
     filename: Mapped[str] = mapped_column(String(255))
-    file_type: Mapped[DocumentType] = mapped_column(Enum(DocumentType, name="document_type"))
+    file_type: Mapped[DocumentType] = mapped_column(pg_enum(DocumentType, "document_type"))
     department_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("departments.id"), nullable=True
     )
@@ -31,7 +32,7 @@ class KnowledgeArticle(Base, UUIDPKMixin, TimestampMixin):
     title: Mapped[str] = mapped_column(String(255))
     content: Mapped[str] = mapped_column(Text)
     source_type: Mapped[KnowledgeSourceType] = mapped_column(
-        Enum(KnowledgeSourceType, name="knowledge_source_type"), default=KnowledgeSourceType.MANUAL
+        pg_enum(KnowledgeSourceType, "knowledge_source_type"), default=KnowledgeSourceType.MANUAL
     )
     department_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("departments.id"), nullable=True

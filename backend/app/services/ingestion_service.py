@@ -11,6 +11,7 @@ import io
 
 import pandas as pd
 from docx import Document as DocxDocument
+from pptx import Presentation
 from pypdf import PdfReader
 
 CHUNK_SIZE_CHARS = 1500
@@ -65,11 +66,29 @@ def extract_csv(content: bytes) -> list[dict]:
     return [{"text": chunk, "metadata": {}} for chunk in _chunk_text(text)]
 
 
+def extract_pptx(content: bytes) -> list[dict]:
+    presentation = Presentation(io.BytesIO(content))
+    chunks = []
+    for slide_number, slide in enumerate(presentation.slides, start=1):
+        texts = [
+            shape.text_frame.text
+            for shape in slide.shapes
+            if shape.has_text_frame and shape.text_frame.text.strip()
+        ]
+        if slide.has_notes_slide and slide.notes_slide.notes_text_frame.text.strip():
+            texts.append(slide.notes_slide.notes_text_frame.text)
+        slide_text = "\n".join(texts)
+        for chunk in _chunk_text(slide_text):
+            chunks.append({"text": chunk, "metadata": {"slide": slide_number}})
+    return chunks
+
+
 EXTRACTORS = {
     "pdf": extract_pdf,
     "docx": extract_docx,
     "xlsx": extract_xlsx,
     "csv": extract_csv,
+    "pptx": extract_pptx,
 }
 
 
