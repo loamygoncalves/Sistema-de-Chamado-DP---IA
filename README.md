@@ -44,7 +44,19 @@ docker compose -f infra/docker-compose.yml up --build
 - Frontend: http://localhost:3000
 - Backend (Swagger): http://localhost:8000/docs
 - Qdrant: http://localhost:6333/dashboard
-- Keycloak: http://localhost:8080
+- Keycloak: http://localhost:8080 (realm `beep` já importado, veja `infra/keycloak/realm-export.json`)
+
+O Keycloak sobe com um realm `beep` pré-configurado e três usuários de teste
+(senha `beep123`): `colaborador.demo`, `analista.demo`, `admin.demo`. Depois que os
+containers estiverem de pé, popule dados de exemplo (FAQs, chamado de exemplo) com:
+
+```bash
+docker compose -f infra/docker-compose.yml exec backend python -m scripts.seed_demo_data
+```
+
+O script é idempotente e os ids dos usuários de demonstração já correspondem aos
+`sub` do Keycloak, então o primeiro login via SSO reaproveita esses registros em
+vez de criar duplicados.
 
 ## Metas do produto
 

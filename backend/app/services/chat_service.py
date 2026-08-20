@@ -66,7 +66,10 @@ async def ask_question(
         answer, confidence, used_ids = result.answer, result.confidence, result.used_source_ids
 
     decision = _decide(confidence, threshold_auto, threshold_suggest)
-    used_sources = [b for b in context_blocks if b["id"] in used_ids] or context_blocks[:3]
+    matched_blocks = [b for b in context_blocks if b["id"] in used_ids] or context_blocks[:3]
+    used_sources = [
+        {"id": b["id"], "type": b["type"], "title": b["title"], "excerpt": b["text"][:300]} for b in matched_blocks
+    ]
 
     db.add(ChatMessage(conversation_id=conversation.id, role=ChatRole.USER, content=question))
 

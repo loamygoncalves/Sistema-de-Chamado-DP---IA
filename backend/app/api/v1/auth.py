@@ -20,6 +20,18 @@ from app.services.audit_service import record_audit_log
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
+_ROLE_PRECEDENCE = [UserRole.ADMIN, UserRole.DEPARTMENT_LEAD, UserRole.ANALYST, UserRole.EMPLOYEE]
+
+
+def _highest_role(claimed_roles: list[str]) -> UserRole:
+    """O IdP é a fonte da verdade para RBAC: mapeia as realm roles do Keycloak/Azure AD
+    (claim `roles`) para o papel interno de maior privilégio presente no token."""
+    claimed = set(claimed_roles or [])
+    for role in _ROLE_PRECEDENCE:
+        if role.value in claimed:
+            return role
+    return UserRole.EMPLOYEE
+
 
 def _code_verifier_and_challenge() -> tuple[str, str]:
     verifier = base64.urlsafe_b64encode(secrets.token_bytes(40)).rstrip(b"=").decode()
@@ -51,15 +63,16 @@ async def callback(code: str, state: str, db: AsyncSession = Depends(get_db)):
     email = userinfo.get("email")
     name = userinfo.get("name", email)
     matricula = userinfo.get("employee_number") or userinfo.get("matricula")
+    role = _highest_role(userinfo.get("roles", []))
 
     result = await db.execute(select(User).where(User.identity_provider_sub == sub))
     user = result.scalar_one_or_none()
     if user is None:
-        user = User(
-            name=name, email=email, matricula=matricula, identity_provider_sub=sub, role=UserRole.EMPLOYEE
-        )
+        user = User(name=name, email=email, matricula=matricula, identity_provider_sub=sub, role=role)
         db.add(user)
         await db.flush()
+    else:
+        user.name, user.email, user.matricula, user.role = name, email, matricula, role
 
     access_token = create_access_token(subject=user.id, role=user.role.value)
     refresh_token = create_refresh_token(subject=user.id)
