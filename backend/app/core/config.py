@@ -56,6 +56,15 @@ class Settings(BaseSettings):
     S3_ACCESS_KEY: str = "minioadmin"
     S3_SECRET_KEY: str = "minioadmin"
 
+    # Sincronização automática da base de conhecimento com uma pasta do Google
+    # Drive — um worker periódico reingesta documentos novos/alterados sem
+    # intervenção manual (ver app/services/drive_sync_service.py).
+    GOOGLE_DRIVE_SYNC_ENABLED: bool = False
+    GOOGLE_DRIVE_FOLDER_ID: str | None = None
+    GOOGLE_SERVICE_ACCOUNT_FILE: str | None = None
+    GOOGLE_DRIVE_DEFAULT_DEPARTMENT_SLUG: str | None = None
+    DRIVE_SYNC_INTERVAL_MINUTES: int = 15
+
     CORS_ORIGINS: list[str] = ["http://localhost:3000"]
 
 

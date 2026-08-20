@@ -45,13 +45,23 @@ erDiagram
 | id | UUID PK | |
 | name | TEXT | Ex.: "Folha de pagamento", "Férias", "Ponto"... |
 | slug | TEXT UNIQUE | |
-| default_sla_hours | INT | SLA padrão da fila |
+| default_sla_hours | INT | SLA padrão da fila (em horas úteis) |
+| default_priority | ENUM(`baixa`,`media`,`alta`,`critica`) | Prioridade aplicada quando o chamado (aberto pela IA ou manualmente) não especifica uma — reflete a importância do assunto, ex.: Folha de pagamento nasce `critica`, acesso ao Portal ADP (Ponto / Atualização Cadastral) nasce `baixa` |
 | is_active | BOOLEAN | |
 
 Seed inicial (`0002_seed_departments.py`): Folha de pagamento, Férias, Vale Refeição,
 Plano de saúde, Vale transporte, Banco de horas, Admissão, Rescisão, Plano
 Odontológico, Seguro de Vida, TotalPass, Gympass, Auxílio Creche, Declarações,
 Empréstimo Consignado, Atualização Cadastral, Telemedicina Conexa, Ponto.
+`default_priority` por fila definido em `0004_department_default_priority.py`.
+
+### Cálculo de SLA em dias úteis
+
+`sla_due_at` é calculado por `app/services/business_time.py` somando as horas de
+SLA ao instante de abertura **pulando integralmente sábados, domingos e feriados
+nacionais** (calculados em `app/services/br_holidays.py`, incluindo os móveis:
+Carnaval, Sexta-feira Santa e Corpus Christi). Ou seja, um chamado crítico com
+SLA de 4h aberto numa sexta às 23h só vence na segunda-feira.
 
 ### `tickets`
 | Campo | Tipo | Descrição |
@@ -101,8 +111,15 @@ Ações: `criado`, `assumido`, `transferido`, `prioridade_alterada`, `comentario
 
 ### `documents`
 `id, filename, file_type ENUM(pdf,docx,xlsx,csv,pptx), department_id FK NULLABLE,
-storage_path, checksum, indexed_at NULLABLE, chunk_count, uploaded_by FK users,
-created_at`.
+storage_path, checksum, indexed_at NULLABLE, chunk_count, uploaded_by FK users NULLABLE,
+source_provider ENUM(upload,google_drive) default upload, external_file_id UNIQUE NULLABLE,
+external_modified_time NULLABLE, created_at`.
+
+`uploaded_by` é nulo para documentos sincronizados automaticamente do Google
+Drive (`source_provider=google_drive`) — não há um usuário humano que fez o
+upload. `external_file_id` (o id do arquivo no Drive) identifica o documento
+entre sincronizações para decidir se ele é novo, mudou (`external_modified_time`
+mais recente que o registrado) ou pode ser pulado sem reprocessar.
 
 ### `chat_conversations`
 `id, user_id FK, title, created_at, updated_at`.

@@ -9,8 +9,9 @@ from app.db.session import get_db
 from app.models.enums import DocumentType
 from app.models.knowledge import FAQ, Document, KnowledgeArticle
 from app.models.user import User
-from app.schemas.knowledge import ArticleCreate, ArticleRead, DocumentRead, FAQCreate, FAQRead
-from app.services import knowledge_service
+from app.schemas.knowledge import ArticleCreate, ArticleRead, DocumentRead, DriveSyncResult, FAQCreate, FAQRead
+from app.services import drive_sync_service, knowledge_service
+from app.services.drive_sync_service import DriveSyncNotConfigured
 
 router = APIRouter(prefix="/knowledge", tags=["knowledge"])
 
@@ -75,3 +76,22 @@ async def get_document(document_id: uuid.UUID, admin: User = Depends(require_adm
     if document is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Documento não encontrado")
     return document
+
+
+@router.post("/documents/sync-drive", response_model=DriveSyncResult)
+async def sync_drive_documents(admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+    """Dispara sob demanda a sincronização com a pasta do Google Drive
+    configurada (`GOOGLE_DRIVE_FOLDER_ID`), sem esperar o próximo ciclo do
+    Celery Beat."""
+    try:
+        result = await drive_sync_service.sync_folder(db)
+    except DriveSyncNotConfigured as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
+    await db.commit()
+    return DriveSyncResult(
+        created=result.created,
+        updated=result.updated,
+        skipped_unchanged=result.skipped_unchanged,
+        skipped_unsupported=result.skipped_unsupported,
+        errors=result.errors,
+    )

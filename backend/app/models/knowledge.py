@@ -7,7 +7,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
 from app.models.enum_types import pg_enum
-from app.models.enums import DocumentType, KnowledgeSourceType
+from app.models.enums import DocumentSourceProvider, DocumentType, KnowledgeSourceType
 from app.models.mixins import TimestampMixin, UUIDPKMixin
 
 
@@ -23,7 +23,12 @@ class Document(Base, UUIDPKMixin, TimestampMixin):
     checksum: Mapped[str] = mapped_column(String(64))
     indexed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     chunk_count: Mapped[int] = mapped_column(Integer, default=0)
-    uploaded_by: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))
+    uploaded_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    source_provider: Mapped[DocumentSourceProvider] = mapped_column(
+        pg_enum(DocumentSourceProvider, "document_source_provider"), default=DocumentSourceProvider.UPLOAD
+    )
+    external_file_id: Mapped[str | None] = mapped_column(String(255), unique=True, nullable=True)
+    external_modified_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class KnowledgeArticle(Base, UUIDPKMixin, TimestampMixin):

@@ -61,8 +61,8 @@ flowchart TB
     Orchestrator --> RAG
     RAG --> Embedder --> Qdrant
     RAG --> Providers
-    RAG -->|score < 60%| TicketAPI
-    RAG -->|"60%–85%"| ChatAPI
+    RAG -->|"score < 60% ou 60%–85%: sugere chamado, aguarda confirmação"| ChatAPI
+    ChatAPI -->|colaborador confirma| TicketAPI
 
     TicketAPI --> PG
     KBAPI --> PG
@@ -104,13 +104,20 @@ sequenceDiagram
     alt score > 85%
         O-->>P: resposta final + fontes
     else 60% <= score <= 85%
-        O-->>P: resposta + botão "Abrir chamado"
+        O-->>P: resposta + botão "Abrir chamado" (sugestão)
     else score < 60%
-        O->>T: criar chamado automaticamente
-        T-->>O: número do chamado
-        O-->>P: resposta parcial + chamado aberto (nº X)
+        O-->>P: "não encontrei resposta segura" + botão "Abrir chamado"
+    end
+
+    opt Colaborador confirma a abertura
+        P->>T: POST .../open-ticket (confirmação explícita)
+        T-->>P: número do chamado
     end
 ```
+
+Em nenhum dos dois últimos ramos um chamado é criado sem a confirmação do
+colaborador — a IA nunca abre um chamado sozinha, mesmo com confiança muito
+baixa. Isso evita gerar um chamado a cada pergunta que a IA não sabe responder.
 
 ## 4. Aprendizado contínuo
 
@@ -124,6 +131,40 @@ flowchart LR
     F --> G[(Indexar no Qdrant)]
     G --> H[Disponível para próximas consultas RAG]
 ```
+
+## 4.1 Sincronização automática com Google Drive
+
+A base de conhecimento pode ser mantida a partir de uma pasta do Google Drive,
+sem reingestão manual: o Celery Beat dispara `sync_folder()`
+(`app/services/drive_sync_service.py`) a cada `DRIVE_SYNC_INTERVAL_MINUTES`
+(padrão 15min) quando `GOOGLE_DRIVE_SYNC_ENABLED=true`.
+
+```mermaid
+flowchart LR
+    A[Celery Beat — a cada N min] --> B[sync_folder]
+    B --> C[Google Drive API: listar arquivos da pasta]
+    C --> D{Arquivo novo, alterado ou já sincronizado?}
+    D -->|Novo| E[Baixar/exportar conteúdo]
+    D -->|modifiedTime mais recente| E
+    D -->|Sem mudança| F[Pular — sem custo de download/embedding]
+    E --> G[ingest_document / reingest_document]
+    G --> H[Gerar embeddings e indexar no Qdrant]
+```
+
+Detalhes:
+- Autenticação via conta de serviço do Google (`GOOGLE_SERVICE_ACCOUNT_FILE`), com a
+  pasta compartilhada com o `client_email` da conta (papel "Leitor").
+- Arquivos nativos do Google Workspace (Docs/Sheets/Slides) são exportados para
+  o formato binário equivalente (docx/xlsx/pptx) antes da ingestão.
+- Cada arquivo é rastreado pelo `external_file_id` (id no Drive); a comparação
+  de `modifiedTime` evita reprocessar arquivos sem mudança.
+- Reindexação usa ids de ponto determinísticos no Qdrant (UUID5 de
+  `documento_id:índice_do_chunk`), então atualizar um arquivo sobrescreve seus
+  vetores em vez de duplicá-los.
+- Também pode ser disparada sob demanda via `POST /knowledge/documents/sync-drive`
+  (papel admin), sem esperar o próximo ciclo do Beat.
+- Um erro em um arquivo (ex.: formato corrompido) não interrompe a sincronização
+  dos demais — fica registrado em `errors` no resultado.
 
 ## 5. Camadas e responsabilidades
 

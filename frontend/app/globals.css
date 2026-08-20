@@ -2,10 +2,6 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --brand: #1466ff;
-}
-
 body {
   @apply bg-slate-50 text-slate-900;
 }

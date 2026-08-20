@@ -88,6 +88,18 @@ services:
     volumes:
       - ../backend:/app
 
+  beat:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile.worker
+    env_file: ../.env
+    command: ["celery", "-A", "app.workers.celery_app", "beat", "--loglevel=INFO"]
+    depends_on:
+      - backend
+      - redis
+    volumes:
+      - ../backend:/app
+
   frontend:
     build:
       context: ../frontend

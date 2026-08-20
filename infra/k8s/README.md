@@ -16,8 +16,14 @@ kubectl wait --for=condition=complete job/beep-backend-migrate -n beep-ai-servic
 kubectl apply -f infra/k8s/21-backend.yaml
 kubectl apply -f infra/k8s/22-worker.yaml
 kubectl apply -f infra/k8s/23-frontend.yaml
+kubectl apply -f infra/k8s/24-beat.yaml
 kubectl apply -f infra/k8s/30-ingress.yaml
 ```
+
+`24-beat.yaml` roda o Celery Beat (agendador) em uma única réplica — necessário
+para a sincronização periódica com o Google Drive (`GOOGLE_DRIVE_SYNC_ENABLED`
+no ConfigMap). Rodar mais de uma réplica do Beat dispararia a mesma tarefa
+agendada em duplicidade, por isso `strategy: Recreate` e `replicas: 1`.
 
 Requisitos do cluster: `ingress-nginx`, `cert-manager` (ou equivalente interno) com um
 `ClusterIssuer` chamado `letsencrypt-internal-ca`, e uma `StorageClass` padrão para os

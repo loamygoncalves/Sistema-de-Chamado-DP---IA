@@ -3,7 +3,12 @@
 Regras de negócio (parametrizáveis via `ai_settings`):
 - confidence > confidence_threshold_auto            -> responde automaticamente.
 - confidence_threshold_suggest <= confidence <= auto -> responde e sugere chamado.
-- confidence < confidence_threshold_suggest          -> abre chamado automaticamente.
+- confidence < confidence_threshold_suggest          -> IA não tem uma resposta segura.
+
+Importante: em nenhum dos dois últimos casos um chamado é criado sozinho. A IA
+só sugere — quem decide se o chamado deve ser aberto é sempre o colaborador,
+via confirmação explícita (`open_ticket_from_suggestion`). Isso evita abrir um
+chamado a cada pergunta que a IA não consegue responder com plena confiança.
 """
 
 import uuid
@@ -12,15 +17,13 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.chat import ChatConversation, ChatMessage
-from app.models.enums import ChatDecision, ChatRole, TicketPriority, TicketSource
+from app.models.enums import ChatDecision, ChatRole, TicketSource
 from app.models.user import User
 from app.services.ai_providers import get_llm_provider
 from app.services.ai_settings_service import get_ai_settings
 from app.services.embeddings import embedding_service
 from app.services.ticket_service import create_ticket
 from app.services.vector_store import vector_store
-
-FALLBACK_DEPARTMENT_SLUG = "declaracoes"
 
 
 def _decide(confidence: float, threshold_auto: float, threshold_suggest: float) -> ChatDecision:
@@ -73,40 +76,15 @@ async def ask_question(
 
     db.add(ChatMessage(conversation_id=conversation.id, role=ChatRole.USER, content=question))
 
-    ticket = None
-    if decision == ChatDecision.AUTO_TICKET:
-        dept_id = user.department_id
-        from sqlalchemy import select
-
-        from app.models.department import Department
-
-        if dept_id is None:
-            dept = (
-                await db.execute(select(Department).where(Department.slug == FALLBACK_DEPARTMENT_SLUG))
-            ).scalar_one_or_none()
-            dept_id = dept.id if dept else None
-        if dept_id:
-            ticket = await create_ticket(
-                db,
-                requester=user,
-                department_id=dept_id,
-                subject=question[:255],
-                description=(
-                    f"Chamado aberto automaticamente pela IA (confiança {confidence:.0%}).\n\n"
-                    f"Pergunta original: {question}\n\nMelhor resposta parcial da IA: {answer}"
-                ),
-                priority=TicketPriority.MEDIA,
-                source=TicketSource.IA_AUTOMATICO,
-                origin_conversation_id=conversation.id,
-            )
-
+    # Nenhum chamado é criado aqui — tanto em SUGGEST_TICKET quanto em
+    # AUTO_TICKET, a resposta apenas convida o colaborador a confirmar a
+    # abertura via `POST .../messages/{id}/open-ticket`.
     assistant_message = ChatMessage(
         conversation_id=conversation.id,
         role=ChatRole.ASSISTANT,
         content=answer,
         confidence_score=round(confidence * 100, 2),
         sources=used_sources,
-        resulted_ticket_id=ticket.id if ticket else None,
     )
     db.add(assistant_message)
     await db.flush()
@@ -117,8 +95,17 @@ async def ask_question(
         "confidence_score": confidence,
         "decision": decision,
         "sources": used_sources,
-        "ticket": ticket,
+        "ticket": None,
     }
+
+
+def _ticket_source_for_confidence(confidence_score, threshold_suggest: float) -> TicketSource:
+    """Classifica a origem do chamado para fins de relatório (dashboard de
+    economia/automação) a partir da confiança que a IA teve na resposta —
+    mesmo que, em ambos os casos, a abertura em si dependa de confirmação."""
+    if confidence_score is not None and float(confidence_score) / 100 >= threshold_suggest:
+        return TicketSource.IA_SUGERIDO
+    return TicketSource.IA_AUTOMATICO
 
 
 async def open_ticket_from_suggestion(
@@ -134,13 +121,16 @@ async def open_ticket_from_suggestion(
     question_msg = question_msg_result.scalar_one_or_none()
     subject = question_msg.content[:255] if question_msg else message.content[:255]
 
+    ai_settings = await get_ai_settings(db)
+    source = _ticket_source_for_confidence(message.confidence_score, float(ai_settings["confidence_threshold_suggest"]))
+
     ticket = await create_ticket(
         db,
         requester=user,
         department_id=department_id,
         subject=subject,
-        description=f"Pergunta: {subject}\n\nResposta da IA (sugerida abertura de chamado):\n{message.content}",
-        source=TicketSource.IA_SUGERIDO,
+        description=f"Pergunta: {subject}\n\nResposta da IA:\n{message.content}",
+        source=source,
         origin_conversation_id=conversation_id,
     )
     message.resulted_ticket_id = ticket.id

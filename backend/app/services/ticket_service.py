@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -9,6 +9,7 @@ from app.models.enums import TicketPriority, TicketSource, TicketStatus
 from app.models.ticket import Ticket, TicketHistory
 from app.models.user import User
 from app.services.ai_settings_service import get_ai_settings
+from app.services.business_time import add_business_hours
 
 SLA_HOURS_BY_PRIORITY_DEFAULT = {
     TicketPriority.BAIXA: 72,
@@ -24,12 +25,13 @@ async def _next_ticket_number(db: AsyncSession) -> str:
 
 
 async def _compute_sla_due_at(db: AsyncSession, department: Department, priority: TicketPriority) -> datetime:
+    """Prazo de SLA em horas úteis — fins de semana e feriados nacionais não contam."""
     ai_settings = await get_ai_settings(db)
     sla_map = ai_settings.get("sla_by_priority") or {}
     hours = sla_map.get(priority.value) if isinstance(sla_map, dict) else None
     hours = hours or SLA_HOURS_BY_PRIORITY_DEFAULT[priority]
     hours = min(hours, department.default_sla_hours) if department.default_sla_hours else hours
-    return datetime.now(timezone.utc) + timedelta(hours=hours)
+    return add_business_hours(datetime.now(timezone.utc), hours)
 
 
 async def create_ticket(
@@ -41,13 +43,18 @@ async def create_ticket(
     description: str,
     category: str | None = None,
     subcategory: str | None = None,
-    priority: TicketPriority = TicketPriority.MEDIA,
+    priority: TicketPriority | None = None,
     source: TicketSource = TicketSource.MANUAL,
     origin_conversation_id: uuid.UUID | None = None,
 ) -> Ticket:
     department = await db.get(Department, department_id)
     if department is None:
         raise ValueError("Departamento (fila) não encontrado")
+
+    # Sem prioridade explícita, a fila define a importância do assunto (ex.:
+    # folha de pagamento nasce crítica; acesso ao portal ADP nasce baixa).
+    if priority is None:
+        priority = department.default_priority
 
     ticket = Ticket(
         ticket_number=await _next_ticket_number(db),

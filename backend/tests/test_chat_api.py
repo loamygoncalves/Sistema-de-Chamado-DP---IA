@@ -45,7 +45,7 @@ async def test_high_confidence_auto_answers_without_opening_ticket(employee_clie
         assert data["sources"][0]["title"] == "Banco de horas"
 
 
-async def test_low_confidence_opens_ticket_automatically(employee_client: AsyncClient):
+async def test_low_confidence_does_not_open_ticket_without_confirmation(employee_client: AsyncClient):
     with (
         patch("app.services.chat_service.embedding_service.embed_one", new=AsyncMock(return_value=[0.1] * 8)),
         patch("app.services.chat_service.vector_store.search", new=AsyncMock(return_value=[])),
@@ -65,8 +65,36 @@ async def test_low_confidence_opens_ticket_automatically(employee_client: AsyncC
         assert response.status_code == 200
         data = response.json()
         assert data["decision"] == "auto_ticket"
-        assert data["ticket"] is not None
-        assert data["ticket"]["ticket_number"].startswith("BEEP-")
+        # A IA nunca abre o chamado sozinha, mesmo com confiança muito baixa —
+        # só a confirmação explícita via open-ticket cria o chamado.
+        assert data["ticket"] is None
+
+
+async def test_low_confidence_ticket_opens_only_after_explicit_confirmation(
+    employee_client: AsyncClient, department
+):
+    with (
+        patch("app.services.chat_service.embedding_service.embed_one", new=AsyncMock(return_value=[0.1] * 8)),
+        patch("app.services.chat_service.vector_store.search", new=AsyncMock(return_value=[])),
+        patch("app.services.chat_service.get_llm_provider") as get_provider,
+    ):
+        get_provider.return_value = AsyncMock()
+
+        conv = await employee_client.post("/api/v1/chat/conversations", json={})
+        conversation_id = conv.json()["id"]
+
+        response = await employee_client.post(
+            f"/api/v1/chat/conversations/{conversation_id}/messages",
+            json={"content": "Pergunta muito específica sem nada na base de conhecimento"},
+        )
+        message_id = response.json()["message_id"]
+
+        confirm = await employee_client.post(
+            f"/api/v1/chat/conversations/{conversation_id}/messages/{message_id}/open-ticket"
+            f"?department_id={department.id}"
+        )
+        assert confirm.status_code == 200
+        assert confirm.json()["ticket_number"].startswith("BEEP-")
 
 
 async def test_medium_confidence_suggests_ticket(employee_client: AsyncClient):

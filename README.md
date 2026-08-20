@@ -64,5 +64,18 @@ vez de criar duplicados.
 - Reduzir em pelo menos 70% a abertura de chamados via automação por IA.
 - Roteamento por confiança da resposta (thresholds parametrizáveis):
   - `> 85%` → resposta automática.
-  - `60%–85%` → resposta + sugestão de abertura de chamado.
-  - `< 60%` → abertura automática de chamado.
+  - `60%–85%` → resposta + sugestão de abertura de chamado (colaborador confirma).
+  - `< 60%` → IA não tem resposta segura + sugestão de abertura de chamado (colaborador confirma).
+
+  A IA nunca abre um chamado sozinha — em qualquer faixa abaixo de 85%, a
+  abertura depende de confirmação explícita do colaborador.
+
+## Sincronização com Google Drive
+
+A base de conhecimento pode ficar sincronizada automaticamente com uma pasta do
+Google Drive — basta atualizar o arquivo na pasta que o próximo ciclo do
+Celery Beat reingere a versão nova (sem subir nada manualmente pelo painel).
+Configuração via `GOOGLE_DRIVE_SYNC_ENABLED`, `GOOGLE_DRIVE_FOLDER_ID` e
+`GOOGLE_SERVICE_ACCOUNT_FILE` (ver `.env.example`); detalhes de funcionamento em
+`docs/ARCHITECTURE.md` (seção 4.1). Também dá para forçar uma sincronização
+imediata via `POST /knowledge/documents/sync-drive` (admin).

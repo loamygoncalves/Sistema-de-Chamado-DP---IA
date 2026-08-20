@@ -5,14 +5,30 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
+        // Paleta oficial Beep Saúde — verde principal #00AFAA.
         brand: {
-          50: "#eef6ff",
-          100: "#d9eaff",
-          500: "#1466ff",
-          600: "#0f52d6",
-          700: "#0c40a8",
-          900: "#0a2a6e",
+          50: "#e0f5f4",
+          100: "#b8e9e6",
+          200: "#8cdbd7",
+          300: "#5fccc6",
+          400: "#33bdb5",
+          500: "#00afaa",
+          600: "#00968f",
+          700: "#007b75",
+          800: "#00625d",
+          900: "#004a47",
         },
+        // Laranja Beep — único acento além do verde, usado com moderação.
+        accent: {
+          50: "#fff1d9",
+          100: "#ffe0ad",
+          500: "#fba600",
+          600: "#d98d00",
+          700: "#7a4d00",
+        },
+      },
+      fontFamily: {
+        sans: ["var(--font-raleway)", "Segoe UI", "sans-serif"],
       },
     },
   },

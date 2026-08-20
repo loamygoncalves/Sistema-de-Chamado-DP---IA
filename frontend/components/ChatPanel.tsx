@@ -108,14 +108,17 @@ export default function ChatPanel() {
                     ))}
                   </ul>
                 )}
-                {message.response.decision === "suggest_ticket" && !message.response.ticket && (
-                  <button
-                    className="btn-secondary mt-1 text-xs"
-                    onClick={() => openSuggestedTicket(message.response!.message_id)}
-                  >
-                    Abrir chamado sobre esta dúvida
-                  </button>
-                )}
+                {(message.response.decision === "suggest_ticket" || message.response.decision === "auto_ticket") &&
+                  !message.response.ticket && (
+                    <button
+                      className="btn-secondary mt-1 text-xs"
+                      onClick={() => openSuggestedTicket(message.response!.message_id)}
+                    >
+                      {message.response.decision === "auto_ticket"
+                        ? "Não resolveu? Abrir chamado para o RH"
+                        : "Abrir chamado sobre esta dúvida"}
+                    </button>
+                  )}
                 {message.response.ticket && (
                   <p className="text-xs text-emerald-700">
                     Chamado {message.response.ticket.ticket_number} aberto.

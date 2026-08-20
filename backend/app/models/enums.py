@@ -45,6 +45,11 @@ class DocumentType(str, enum.Enum):
     PPTX = "pptx"
 
 
+class DocumentSourceProvider(str, enum.Enum):
+    UPLOAD = "upload"
+    GOOGLE_DRIVE = "google_drive"
+
+
 class ChatRole(str, enum.Enum):
     USER = "user"
     ASSISTANT = "assistant"

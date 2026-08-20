@@ -19,8 +19,8 @@ login e troca de token no backend). Todas as respostas de erro seguem
 | POST | `/chat/conversations` | Cria conversa | employee+ |
 | GET | `/chat/conversations` | Lista conversas do usuário | employee+ |
 | GET | `/chat/conversations/{id}` | Histórico de mensagens | employee+ (dono) |
-| POST | `/chat/conversations/{id}/messages` | Envia pergunta; retorna resposta da IA, score, fontes, e `ticket` se aberto automaticamente | employee+ |
-| POST | `/chat/conversations/{id}/messages/{message_id}/open-ticket` | Converte sugestão em chamado (faixa 60–85%) | employee+ (dono) |
+| POST | `/chat/conversations/{id}/messages` | Envia pergunta; retorna resposta da IA, score e fontes. **Nunca abre chamado sozinho** — `ticket` vem sempre `null` | employee+ |
+| POST | `/chat/conversations/{id}/messages/{message_id}/open-ticket` | Cria o chamado somente após confirmação explícita do colaborador (faixas `suggest_ticket` 60–85% e `auto_ticket` <60%) | employee+ (dono) |
 
 Resposta de `POST /messages`:
 ```json
@@ -32,9 +32,14 @@ Resposta de `POST /messages`:
   "sources": [
     {"type": "policy", "title": "Política de Home Office", "excerpt": "...", "id": "uuid"}
   ],
-  "ticket": {"id": "uuid", "ticket_number": "BEEP-000123"}
+  "ticket": null
 }
 ```
+
+`decision` só informa a UI sobre qual mensagem mostrar — a abertura do chamado em
+si é sempre uma ação separada e explícita do colaborador via `open-ticket`,
+mesmo quando `decision` é `auto_ticket` (baixa confiança). Isso evita abrir um
+chamado a cada pergunta que a IA não consiga responder com segurança.
 
 ## Tickets
 | Método | Rota | Descrição | Papéis |
@@ -60,6 +65,10 @@ Resposta de `POST /messages`:
 | POST | `/knowledge/faqs` | Cria FAQ | admin |
 | POST | `/knowledge/documents` | Upload de documento (PDF/DOCX/XLSX/CSV/PPTX) para ingestão | admin |
 | GET | `/knowledge/documents/{id}` | Status de indexação | admin |
+| POST | `/knowledge/documents/sync-drive` | Dispara sob demanda a sincronização com a pasta do Google Drive configurada (`GOOGLE_DRIVE_FOLDER_ID`), sem esperar o próximo ciclo do Celery Beat. Retorna `{created, updated, skipped_unchanged, skipped_unsupported, errors}` (nomes dos arquivos em cada lista). `400` se `GOOGLE_DRIVE_FOLDER_ID`/`GOOGLE_SERVICE_ACCOUNT_FILE` não estiverem configurados | admin |
+
+A mesma sincronização também roda automaticamente a cada `DRIVE_SYNC_INTERVAL_MINUTES`
+via Celery Beat quando `GOOGLE_DRIVE_SYNC_ENABLED=true` — ver `docs/ARCHITECTURE.md`.
 
 ## Departamentos
 | Método | Rota | Descrição | Papéis |

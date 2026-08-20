@@ -1,0 +1,31 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: beep-beat
+  namespace: beep-ai-service-desk
+  labels:
+    app: beep-beat
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: beep-beat
+  template:
+    metadata:
+      labels:
+        app: beep-beat
+    spec:
+      containers:
+        - name: beat
+          image: registry.beepsaude.com.br/beep-ai-service-desk/backend-worker:latest
+          command: ["celery", "-A", "app.workers.celery_app", "beat", "--loglevel=INFO"]
+          envFrom:
+            - configMapRef:
+                name: beep-backend-config
+            - secretRef:
+                name: beep-backend-secrets
+          resources:
+            requests: { cpu: "100m", memory: "256Mi" }
+            limits: { cpu: "250m", memory: "512Mi" }

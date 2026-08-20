@@ -3,7 +3,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict
 
-from app.models.enums import DocumentType, KnowledgeSourceType
+from app.models.enums import DocumentSourceProvider, DocumentType, KnowledgeSourceType
 
 
 class ArticleCreate(BaseModel):
@@ -50,3 +50,13 @@ class DocumentRead(BaseModel):
     department_id: uuid.UUID | None
     indexed_at: datetime | None
     chunk_count: int
+    source_provider: DocumentSourceProvider
+    external_file_id: str | None
+
+
+class DriveSyncResult(BaseModel):
+    created: list[str]
+    updated: list[str]
+    skipped_unchanged: list[str]
+    skipped_unsupported: list[str]
+    errors: list[str]

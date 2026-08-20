@@ -4,7 +4,7 @@ import type { ChatDecision } from "@/lib/types";
 const LABELS: Record<ChatDecision, string> = {
   auto_answer: "Resposta automática",
   suggest_ticket: "Sugestão de chamado",
-  auto_ticket: "Chamado aberto automaticamente",
+  auto_ticket: "Confirmação de chamado necessária",
 };
 
 const STYLES: Record<ChatDecision, string> = {

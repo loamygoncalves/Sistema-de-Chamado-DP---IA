@@ -1,10 +1,61 @@
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import select
 
 from app.models.department import Department
 from app.models.user import User
 
 pytestmark = pytest.mark.asyncio
+
+
+async def test_ticket_without_priority_uses_department_default(
+    employee_client: AsyncClient, department: Department, db_session
+):
+    # A fila "ferias" nasce com prioridade padrão "media" (migração 0004).
+    response = await employee_client.post(
+        "/api/v1/tickets",
+        json={
+            "department_id": str(department.id),
+            "subject": "Dúvida sobre saldo de férias",
+            "description": "Quero saber quantos dias de férias ainda tenho.",
+        },
+    )
+    assert response.status_code == 200
+    assert response.json()["priority"] == department.default_priority.value
+
+
+async def test_high_priority_department_opens_ticket_as_critical(employee_client: AsyncClient, db_session):
+    payroll = (
+        await db_session.execute(select(Department).where(Department.slug == "folha-de-pagamento"))
+    ).scalar_one()
+
+    response = await employee_client.post(
+        "/api/v1/tickets",
+        json={
+            "department_id": str(payroll.id),
+            "subject": "Salário não caiu",
+            "description": "Meu salário deveria ter caído hoje e não caiu.",
+        },
+    )
+    assert response.status_code == 200
+    assert response.json()["priority"] == "critica"
+
+
+async def test_low_priority_department_opens_ticket_as_low(employee_client: AsyncClient, db_session):
+    adp_access = (
+        await db_session.execute(select(Department).where(Department.slug == "atualizacao-cadastral"))
+    ).scalar_one()
+
+    response = await employee_client.post(
+        "/api/v1/tickets",
+        json={
+            "department_id": str(adp_access.id),
+            "subject": "Não consigo acessar o Portal ADP",
+            "description": "Esqueci minha senha do Portal ADP.",
+        },
+    )
+    assert response.status_code == 200
+    assert response.json()["priority"] == "baixa"
 
 
 async def test_employee_can_open_and_view_own_ticket(employee_client: AsyncClient, department: Department):

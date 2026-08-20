@@ -12,7 +12,9 @@ class TicketCreate(BaseModel):
     subcategory: str | None = None
     subject: str
     description: str
-    priority: TicketPriority = TicketPriority.MEDIA
+    # Sem valor, a prioridade padrão da fila é usada (ex.: folha de pagamento
+    # nasce crítica). O colaborador ainda pode indicar explicitamente.
+    priority: TicketPriority | None = None
 
 
 class TicketRead(BaseModel):
