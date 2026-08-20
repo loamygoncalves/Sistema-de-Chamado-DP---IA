@@ -48,123 +48,183 @@ DEMO_USERS = [
     },
 ]
 
-# Conteúdo extraído do "Guia do Colaborador" (deck de onboarding da BEEP Saúde) +
-# algumas perguntas complementares, para que a IA já nasça respondendo com
-# informação real de benefícios e processos de DP.
+# Conteúdo extraído do "Guia do Colaborador Detalhado" (documento oficial de DP da
+# BEEP Saúde) + complementos do deck de onboarding, para que a IA já nasça
+# respondendo com informação real de benefícios e processos de DP.
 DEMO_FAQS = [
     (
         "Quando e onde recebo meu salário?",
-        "O pagamento ocorre no 5º dia útil de cada mês (o sábado conta como dia útil), com depósito "
-        "exclusivo nas contas Bradesco ou Next. Para outro banco, solicite a portabilidade salarial "
-        "diretamente na instituição financeira de sua preferência.",
+        "O pagamento ocorre no 5º dia útil de cada mês (o sábado conta como dia útil), exclusivamente "
+        "nas contas Bradesco ou Next (conta salário ou conta corrente). Para abrir a conta salário "
+        "online, use o Código de Convênio 180801805 e o CNPJ 28.286.170/0001-01. Para receber em outro "
+        "banco, solicite a portabilidade salarial diretamente na instituição financeira de sua preferência.",
         "folha-de-pagamento",
     ),
     (
-        "Como solicitar férias?",
-        "Solicite pelo portal do colaborador com pelo menos 30 dias de antecedência. "
-        "O RH aprova em até 5 dias úteis e o aviso de férias é gerado automaticamente.",
+        "Como funciona o pagamento do 13º salário?",
+        "O 13º é pago em duas parcelas: a primeira até 30/11, correspondente a 50% do valor total e sem "
+        "descontos; a segunda até 20/12, já com desconto de INSS e Imposto de Renda.",
+        "folha-de-pagamento",
+    ),
+    (
+        "Como solicitar férias e o que reduz a quantidade de dias?",
+        "Os gestores devem solicitar até o dia 10 do mês anterior ao mês de gozo, e o depósito ocorre "
+        "até 2 dias antes do início do período aprovado. Atenção: faltas injustificadas no período "
+        "aquisitivo de 12 meses reduzem os dias de férias (Art. 130 da CLT) — até 5 faltas mantém os 30 "
+        "dias corridos; de 6 a 14 faltas reduz para 24 dias; de 15 a 23 faltas para 18 dias; de 24 a 32 "
+        "faltas para 12 dias; acima de 32 faltas há perda do direito às férias no período.",
         "ferias",
     ),
     (
         "Como funciona o Vale Refeição/Alimentação?",
-        "O benefício provisório fica disponível em até 72h úteis no cartão provisório (diarista 6h: "
-        "R$ 15,00/dia; diarista/plantonista acima de 6h: R$ 30,00/dia). O cartão definitivo é enviado "
-        "até a 1ª semana do mês seguinte à admissão, já com a carga do benefício do mês. É necessário "
-        "criar login no app da Ticket e adicionar o cartão.",
+        "No mês da admissão (provisório), o valor é depositado no cartão entregue no onboarding em até "
+        "72h úteis, com desconto de 1 dia de trabalho — se a admissão ocorrer após o dia 15, o depósito já "
+        "contempla o mês seguinte também (ex.: admissão em 17/01 cobre de 17/01 a 28/02). Depois da "
+        "admissão (definitivo), o valor é creditado todo dia 25 no cartão definitivo entregue no Hub, "
+        "para uso no mês seguinte, também com desconto de 1 dia de trabalho. Solicitações e atualizações "
+        "de benefícios devem ser feitas até o dia 15 de cada mês.",
         "vale-refeicao",
     ),
     (
         "Como funciona o Vale Transporte?",
-        "O benefício provisório é disponibilizado em até 72h úteis via Pix ou na conta Bradesco/Next, "
-        "com desconto de 6% do salário base. O benefício definitivo exige o cartão em mãos, com depósito "
-        "até o dia 25 de cada mês para uso no mês seguinte. Extras de VT e Ticket Refeição/Alimentação, "
-        "calculados pelos dias trabalhados além da escala, são disponibilizados sempre no dia 20 do mês seguinte.",
+        "No mês da admissão (provisório), o valor é depositado via Pix ou na conta Bradesco/Next aberta "
+        "na admissão, em até 72h úteis, com desconto de 6% do salário base. Depois da admissão "
+        "(definitivo), é creditado no cartão da operadora até o último dia do mês, com o mesmo desconto "
+        "de 6% do salário base — é necessário ter o cartão em mãos.",
         "vale-transporte",
     ),
     (
-        "Como funciona o Plano de Saúde?",
-        "O titular não paga mensalidade, apenas 30% de coparticipação em qualquer utilização. Dependentes "
-        "(filhos e cônjuge) pagam mensalidade conforme tabela de valores, também com 30% de coparticipação. "
-        "A ativação ocorre até o dia 10 do mês seguinte à admissão para o BackOffice, e em até 3 meses para "
-        "o time operacional. O acesso é pelo aplicativo do plano, com os dados pessoais.",
+        "Como funcionam os benefícios extras de VT e VR/VA?",
+        "Vale-Transporte e Refeição/Alimentação extras, referentes a dias trabalhados além da escala "
+        "habitual, são calculados com base nesses dias e disponibilizados no dia 20 do mês seguinte.",
+        "vale-refeicao",
+    ),
+    (
+        "Como funciona o Plano de Saúde (Bradesco Saúde)?",
+        "O titular não paga mensalidade, apenas 30% de coparticipação em consultas e exames simples, e "
+        "30% em pronto atendimento (limitado a R$ 150,00). Dependentes legais (filhos e cônjuge) pagam "
+        "mensalidade conforme tabela, com a mesma coparticipação. Ativação do titular: BackOffice até o "
+        "dia 10 do mês seguinte à admissão, Time Operacional em 3 meses; dependente em até 30 dias da "
+        "admissão, nascimento ou casamento. Acesso pelo app do plano no primeiro acesso, com os dados "
+        "pessoais. O repasse de coparticipação pode levar até 3 meses do procedimento.",
+        "plano-de-saude",
+    ),
+    (
+        "Quais serviços adicionais o Plano de Saúde oferece?",
+        "Meu Doutor Bradesco Saúde dá acesso facilitado a profissionais selecionados; a Novamed é uma "
+        "rede de clínicas integrada, sem coparticipação e com telemedicina em algumas unidades; a Saúde "
+        "Digital é telemedicina por vídeo disponível 24h; e o Clube + Saúde oferece descontos em lojas e "
+        "estabelecimentos parceiros. Atendimento: capitais e regiões metropolitanas 4004-2700; demais "
+        "localidades 0800 701 2700.",
         "plano-de-saude",
     ),
     (
         "Como incluir dependente no plano de saúde?",
-        "Envie certidão de nascimento/casamento e CPF do dependente pelo portal de chamados, "
-        "categoria Plano de saúde. A inclusão é homologada pela operadora em até 10 dias úteis.",
+        "A solicitação deve ser feita em até 30 dias da admissão, do nascimento ou do casamento, "
+        "enviando os documentos do dependente pelo portal de chamados, categoria Plano de saúde.",
         "plano-de-saude",
     ),
     (
         "Como funciona o Plano Odontológico?",
-        "O titular não paga mensalidade nem coparticipação. Dependentes (filhos e cônjuge) pagam "
-        "mensalidade de R$ 12,12, sem coparticipação. A ativação segue o mesmo prazo do plano de saúde: "
-        "até o dia 10 do mês seguinte à admissão (BackOffice) ou 3 meses (operacional). Acesso pelo "
-        "aplicativo do plano.",
+        "O titular não paga mensalidade nem coparticipação. Dependentes legais pagam mensalidade de "
+        "R$ 12,12, sem coparticipação. Mesmos prazos de ativação do plano de saúde. Convênio Bradesco "
+        "Seguros, acesso pelo app no primeiro acesso.",
         "plano-odontologico",
     ),
     (
-        "Como funciona a Telemedicina Conexa Saúde?",
-        "Titular e dependentes no plano têm acesso sem mensalidade e sem coparticipação a atendimentos "
-        "de clínico geral, nutricionista e psicólogo. Prazo de ativação: até o dia 10 do mês seguinte à "
-        "admissão (BackOffice) ou 3 meses (operacional). Acesso pelo aplicativo, com os dados pessoais.",
+        "Como funciona a Conexa Saúde (Telemedicina)?",
+        "O titular não paga mensalidade nem coparticipação; dependentes legais pagam R$ 12,12, sem "
+        "coparticipação. Ativação do titular segue a área de atuação (BackOffice até o dia 10 do mês "
+        "seguinte à admissão, operacional em 3 meses); a do dependente depende da ativação do Plano de "
+        "Saúde. Acesso pelo app no primeiro acesso.",
         "telemedicina-conexa",
     ),
     (
-        "Como funciona o TotalPass?",
-        "O acesso segue o plano escolhido na plataforma, sem coparticipação, com as redes disponíveis "
-        "no próprio app. A ativação ocorre no dia 10 do mês seguinte à admissão.",
-        "totalpass",
-    ),
-    (
-        "Como funciona o Wellhub (Gympass)?",
-        "Assim como o TotalPass, o acesso segue o plano escolhido na plataforma, sem coparticipação. "
-        "A ativação ocorre no dia 10 do mês seguinte à admissão, com acesso pelo aplicativo.",
-        "gympass",
-    ),
-    (
-        "O que cobre o Seguro de Vida?",
-        "É sem custo para o titular e inclui assistência funeral (para titular e dependentes), coroa de "
-        "flores (para pais, cônjuge e filhos) e cartão natalidade em caso de nascimento de filho(a).",
+        "O que cobre o Seguro de Vida MetLife?",
+        "É sem custo para o colaborador. Inclui assistência funeral para titular e dependentes legais, "
+        "coroa de flores para pais, cônjuge e filhos, e cartão natalidade em caso de nascimento de "
+        "filho(a).",
         "seguro-de-vida",
     ),
     (
-        "Quem tem direito ao Auxílio Creche e qual o valor?",
+        "Como funciona o TotalPass?",
+        "A mensalidade do titular e dos dependentes legais segue o plano escolhido na plataforma, sem "
+        "coparticipação. Ativação até o dia 10 do mês seguinte à admissão; a do dependente ocorre após a "
+        "ativação do titular. Acesso pelo app, informando e-mail pessoal e a empresa Beep Saúde no "
+        "primeiro acesso.",
+        "totalpass",
+    ),
+    (
+        "Como funciona o Wellhub (antigo Gympass)?",
+        "Assim como o TotalPass, a mensalidade segue o plano escolhido na plataforma, sem coparticipação "
+        "para titular ou dependentes. Ativação até o dia 10 do mês seguinte à admissão, com acesso pelo "
+        "app usando e-mail pessoal e informando a empresa Beep Saúde.",
+        "gympass",
+    ),
+    (
+        "Tenho desconto em vacinas e exames?",
+        "Sim — você e sua família (cônjuge e filhos) têm 10% de desconto em vacinas e 20% em exames. "
+        "Preencha o formulário do time Comercial em app.pipefy.com/public/form/cY3fhrUL para gerar o "
+        "cupom de desconto.",
+        "declaracoes",
+    ),
+    (
+        "Quem tem direito ao Auxílio Creche e como solicitar?",
         "Têm direito mães com filho de até 6 anos (no mês do aniversário) e pais com filho de até 6 anos "
         "com guarda judicial total da criança. O valor mensal é de R$ 324,20 no Rio de Janeiro e R$ 361,31 "
-        "em São Paulo. São aceitos recibo de papelaria assinado por ambas as partes com valor, ou boleto "
-        "da creche com comprovante de pagamento.",
+        "em São Paulo. Envie recibo de papelaria assinado com valor, ou boleto da creche com comprovante "
+        "de pagamento, até o dia 20 de cada mês, por chamado na plataforma TomTicket "
+        "(beep.tomticket.com/helpdesk).",
         "auxilio-creche",
     ),
     (
+        "Como solicitar pensão alimentícia (ofício de pensão)?",
+        "Envie o ofício de pensão com os dados bancários do recebedor por chamado na plataforma "
+        "TomTicket (beep.tomticket.com/helpdesk).",
+        "declaracoes",
+    ),
+    (
         "Como funciona o registro de ponto?",
-        "O ponto é biométrico, registrado por impressão digital em qualquer um dos Hubs, com tolerância "
-        "de marcação de 10 minutos. Em caso de divergência, o ajuste deve ser feito no portal ADP, onde "
-        "também são consultados contracheques, informe de rendimentos, benefícios e dependentes ativos.",
+        "O ponto é biométrico (impressão digital), registrado em qualquer Hub, com marcação apenas de "
+        "entrada e saída e tolerância de 10 minutos. Divergências são ajustadas no Portal ADP, onde "
+        "também ficam disponíveis contracheques, informe de rendimentos, benefícios cadastrados, "
+        "dependentes ativos e ajustes de ponto. O acesso é enviado por e-mail.",
         "ponto",
     ),
     (
-        "Como funciona o banco de horas?",
-        "A janela do banco de horas é de 6 em 6 meses. Em dias de escala, as 2 primeiras horas extras "
-        "viram banco de horas e o restante é pago como hora extra; em dias de folga, plantonistas recebem "
-        "hora extra e diaristas recebem crédito no banco de horas. Toda hora extra precisa ser autorizada "
-        "pela gestão. O ponto de um mês é apurado até o dia 31, processado na folha do mês seguinte e "
-        "pago no 5º dia útil do mês posterior a esse.",
+        "Como funciona o banco de horas e as horas extras?",
+        "A janela do banco de horas é semestral: 1ª janela de fevereiro a julho, 2ª de agosto a janeiro — "
+        "ao encerrar cada janela, os valores finais são pagos ou descontados em folha. Diaristas (6x1 e "
+        "5x2): em dias de escala, as 2 primeiras horas excedentes entram para o banco e o restante é hora "
+        "extra; em dias de folga, tudo vira crédito de banco de horas. Plantonistas (12x36): mesma regra "
+        "das 2 primeiras horas em dias de escala; em folgas, tudo é hora extra. O fechamento do ponto "
+        "ocorre no 3º dia útil do mês — depois disso não é possível fazer ajuste nem reembolso retroativo.",
         "banco-de-horas",
     ),
     (
-        "Como atualizar meus dados cadastrais?",
-        "A atualização é feita pelo portal de chamados do RH, abrindo uma solicitação com o dado a ser "
-        "alterado: endereço, telefone, e-mail, dados bancários, dependentes, estado civil, ofício de "
-        "pensão, registro profissional (COREN, CRF) ou CNH válida com EAR.",
+        "Quais dados devo manter atualizados e como faço isso?",
+        "Mantenha atualizados: endereço, telefone, e-mail, dados bancários, dependentes, estado civil, "
+        "registro profissional (COREN, CRF) e CNH válida com EAR. A atualização é feita por chamado na "
+        "plataforma TomTicket (beep.tomticket.com/helpdesk).",
         "atualizacao-cadastral",
     ),
     (
-        "Como proceder em caso de afastamento ou atestado médico?",
-        "Avise sua liderança imediatamente, envie o atestado pelo canal indicado pelo RH e aguarde o "
-        "contato do time de saúde e segurança do trabalho. Os documentos comprobatórios devem ser "
-        "enviados em até 24h para serem lançados no sistema.",
-        None,
+        "Como enviar um atestado médico por ausência no trabalho?",
+        "Abra o chamado pela plataforma Pipefy (app.pipefy.com/public/form/4qqvxrxk) e aguarde o contato "
+        "do time de Saúde do Trabalho para dar seguimento ao lançamento do documento.",
+        "declaracoes",
+    ),
+    (
+        "Quais são as ausências legais previstas e seus prazos?",
+        "Atestado ou declaração de horas: abono do período com documento comprobatório. Licença "
+        "falecimento: 3 dias consecutivos a partir da data registrada no documento, para ascendentes e "
+        "descendentes (pais, irmãos, filhos, netos, bisnetos, avós, bisavós). Licença casamento: 5 dias em "
+        "São Paulo ou 3 dias no Rio de Janeiro e Distrito Federal, a partir da data do documento. "
+        "Acompanhamento médico familiar: 1 dia por ano para levar filho de até 6 anos ao médico, ou até 6 "
+        "consultas/exames da companheira durante a gravidez (o documento deve ter nome do colaborador e "
+        "do dependente, data do atendimento, carimbo e assinatura do médico). Licença paternidade: 5 dias "
+        "corridos a partir da comprovação da paternidade, conforme a CLT.",
+        "declaracoes",
     ),
     (
         "Qual a política de home office?",
