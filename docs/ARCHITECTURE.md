@@ -166,6 +166,9 @@ Detalhes:
 - Um erro em um arquivo (ex.: formato corrompido) não interrompe a sincronização
   dos demais — fica registrado em `errors` no resultado.
 
+Passo a passo de configuração (criação da conta de serviço no Google Cloud,
+compartilhamento da pasta, variáveis de ambiente): `docs/GOOGLE_DRIVE_SETUP.md`.
+
 ## 5. Camadas e responsabilidades
 
 | Camada | Tecnologia | Responsabilidade |

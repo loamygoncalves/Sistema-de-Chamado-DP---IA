@@ -79,3 +79,6 @@ Configuração via `GOOGLE_DRIVE_SYNC_ENABLED`, `GOOGLE_DRIVE_FOLDER_ID` e
 `GOOGLE_SERVICE_ACCOUNT_FILE` (ver `.env.example`); detalhes de funcionamento em
 `docs/ARCHITECTURE.md` (seção 4.1). Também dá para forçar uma sincronização
 imediata via `POST /knowledge/documents/sync-drive` (admin).
+
+Passo a passo completo para habilitar (criar a conta de serviço do Google,
+compartilhar a pasta, configurar o servidor): `docs/GOOGLE_DRIVE_SETUP.md`.
