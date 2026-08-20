@@ -36,7 +36,9 @@ class LLMResult:
 
 class LLMProvider(ABC):
     @abstractmethod
-    async def generate(self, *, question: str, context_blocks: list[dict]) -> LLMResult: ...
+    async def generate(
+        self, *, question: str, context_blocks: list[dict], history: list[dict] | None = None
+    ) -> LLMResult: ...
 
     @abstractmethod
     async def summarize_ticket(self, *, subject: str, description: str, resolution_history: str) -> dict: ...
@@ -68,12 +70,16 @@ class AnthropicProvider(LLMProvider):
         self._model = settings.ANTHROPIC_MODEL
 
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=1, max=8))
-    async def generate(self, *, question: str, context_blocks: list[dict]) -> LLMResult:
+    async def generate(
+        self, *, question: str, context_blocks: list[dict], history: list[dict] | None = None
+    ) -> LLMResult:
+        messages = [{"role": turn["role"], "content": turn["content"]} for turn in (history or [])]
+        messages.append({"role": "user", "content": _build_context_prompt(question, context_blocks)})
         message = await self._client.messages.create(
             model=self._model,
             max_tokens=1024,
             system=SYSTEM_PROMPT,
-            messages=[{"role": "user", "content": _build_context_prompt(question, context_blocks)}],
+            messages=messages,
         )
         data = _parse_json_response(message.content[0].text)
         return LLMResult(
@@ -102,14 +108,16 @@ class OpenAIProvider(LLMProvider):
         self._model = settings.OPENAI_MODEL
 
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=1, max=8))
-    async def generate(self, *, question: str, context_blocks: list[dict]) -> LLMResult:
+    async def generate(
+        self, *, question: str, context_blocks: list[dict], history: list[dict] | None = None
+    ) -> LLMResult:
+        messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+        messages.extend({"role": turn["role"], "content": turn["content"]} for turn in (history or []))
+        messages.append({"role": "user", "content": _build_context_prompt(question, context_blocks)})
         completion = await self._client.chat.completions.create(
             model=self._model,
             response_format={"type": "json_object"},
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": _build_context_prompt(question, context_blocks)},
-            ],
+            messages=messages,
         )
         data = _parse_json_response(completion.choices[0].message.content)
         return LLMResult(

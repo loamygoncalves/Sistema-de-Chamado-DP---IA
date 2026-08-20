@@ -20,13 +20,26 @@ export default function ChatPanel() {
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    api.post<Conversation>("/chat/conversations", {}).then(setConversation).catch(() => {});
+    startNewConversation();
     api.get<Department[]>("/departments").then(setDepartments).catch(() => {});
   }, []);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  function startNewConversation() {
+    api.post<Conversation>("/chat/conversations", {}).then(setConversation).catch(() => {});
+    setMessages([]);
+  }
+
+  async function endConversation() {
+    if (!conversation || conversation.status === "encerrada") return;
+    await api.post(`/chat/conversations/${conversation.id}/close`, {}).catch(() => {});
+    // A IA "esquece" a conversa atual — a próxima pergunta começa uma conversa
+    // nova, sem nenhuma memória desta.
+    startNewConversation();
+  }
 
   async function sendQuestion() {
     if (!input.trim() || !conversation || sending) return;
@@ -70,11 +83,18 @@ export default function ChatPanel() {
 
   return (
     <div className="card flex h-[560px] flex-col">
-      <div className="mb-3">
-        <h2 className="font-semibold">Pergunte à IA do BEEP</h2>
-        <p className="text-sm text-slate-500">
-          Ex.: &ldquo;Como funciona meu banco de horas?&rdquo;, &ldquo;Como solicitar férias?&rdquo;
-        </p>
+      <div className="mb-3 flex items-start justify-between gap-3">
+        <div>
+          <h2 className="font-semibold">Pergunte à IA do BEEP</h2>
+          <p className="text-sm text-slate-500">
+            Ex.: &ldquo;Como funciona meu banco de horas?&rdquo;, &ldquo;Como solicitar férias?&rdquo;
+          </p>
+        </div>
+        {messages.length > 0 && (
+          <button className="btn-secondary shrink-0 text-xs" onClick={endConversation}>
+            Encerrar conversa
+          </button>
+        )}
       </div>
 
       <div className="flex-1 space-y-4 overflow-y-auto pr-1">
@@ -115,7 +135,7 @@ export default function ChatPanel() {
                       onClick={() => openSuggestedTicket(message.response!.message_id)}
                     >
                       {message.response.decision === "auto_ticket"
-                        ? "Não resolveu? Abrir chamado para o RH"
+                        ? "Não resolveu? Abrir chamado para o DP"
                         : "Abrir chamado sobre esta dúvida"}
                     </button>
                   )}

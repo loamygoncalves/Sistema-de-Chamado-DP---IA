@@ -4,7 +4,7 @@ from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict
 
-from app.models.enums import ChatDecision, ChatRole
+from app.models.enums import ChatConversationStatus, ChatDecision, ChatRole
 
 
 class ConversationCreate(BaseModel):
@@ -16,6 +16,8 @@ class ConversationRead(BaseModel):
 
     id: uuid.UUID
     title: str | None
+    status: ChatConversationStatus
+    closed_at: datetime | None
     created_at: datetime
 
 

@@ -60,3 +60,8 @@ class ChatDecision(str, enum.Enum):
     AUTO_ANSWER = "auto_answer"
     SUGGEST_TICKET = "suggest_ticket"
     AUTO_TICKET = "auto_ticket"
+
+
+class ChatConversationStatus(str, enum.Enum):
+    ATIVA = "ativa"
+    ENCERRADA = "encerrada"

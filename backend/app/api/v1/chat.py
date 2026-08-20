@@ -17,7 +17,12 @@ from app.schemas.chat import (
     SourceRef,
     TicketRef,
 )
-from app.services.chat_service import ask_question, open_ticket_from_suggestion
+from app.services.chat_service import (
+    ConversationClosedError,
+    ask_question,
+    close_conversation,
+    open_ticket_from_suggestion,
+)
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
@@ -59,6 +64,17 @@ async def get_conversation_messages(
     return result.scalars().all()
 
 
+@router.post("/conversations/{conversation_id}/close", response_model=ConversationRead)
+async def close(conversation_id: uuid.UUID, user: User = Depends(require_employee), db: AsyncSession = Depends(get_db)):
+    """Encerra a conversa — a IA esquece o histórico dela. Uma nova conversa
+    (`POST /chat/conversations`) começa sem nenhuma memória desta."""
+    conversation = await _get_owned_conversation(db, conversation_id, user)
+    conversation = await close_conversation(db, conversation)
+    await db.commit()
+    await db.refresh(conversation)
+    return conversation
+
+
 @router.post("/conversations/{conversation_id}/messages", response_model=MessageResponse)
 async def post_message(
     conversation_id: uuid.UUID,
@@ -67,7 +83,10 @@ async def post_message(
     db: AsyncSession = Depends(get_db),
 ):
     conversation = await _get_owned_conversation(db, conversation_id, user)
-    result = await ask_question(db, user=user, conversation=conversation, question=payload.content)
+    try:
+        result = await ask_question(db, user=user, conversation=conversation, question=payload.content)
+    except ConversationClosedError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
     await db.commit()
 
     ticket = result["ticket"]

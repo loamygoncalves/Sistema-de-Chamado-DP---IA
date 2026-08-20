@@ -122,7 +122,13 @@ entre sincronizações para decidir se ele é novo, mudou (`external_modified_ti
 mais recente que o registrado) ou pode ser pulado sem reprocessar.
 
 ### `chat_conversations`
-`id, user_id FK, title, created_at, updated_at`.
+`id, user_id FK, title, status ENUM(ativa,encerrada) default ativa, closed_at NULLABLE, created_at, updated_at`.
+
+Encerrar uma conversa (`POST /chat/conversations/{id}/close`) é o que faz a IA
+"esquecer" o histórico dela — mensagens de uma conversa `encerrada` não são
+mais aceitas (`409`), e uma nova conversa não herda nenhuma memória da
+anterior. A conversa encerrada continua consultável (histórico), só não
+aceita novas mensagens.
 
 ### `chat_messages`
 | Campo | Tipo | Descrição |

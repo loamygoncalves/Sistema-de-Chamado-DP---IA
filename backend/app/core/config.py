@@ -49,6 +49,10 @@ class Settings(BaseSettings):
     CONFIDENCE_THRESHOLD_AUTO: float = 0.85
     CONFIDENCE_THRESHOLD_SUGGEST: float = 0.60
     RAG_TOP_K: int = 6
+    # Nº de mensagens anteriores (usuário+IA) enviadas como memória de conversa
+    # a cada nova pergunta. Maior = perguntas de acompanhamento fazem mais
+    # sentido, mas cada mensagem custa mais tokens de entrada no LLM.
+    CHAT_HISTORY_MAX_MESSAGES: int = 12
 
     # Object storage
     S3_ENDPOINT_URL: str = "http://localhost:9000"

@@ -62,9 +62,13 @@ export interface TicketDetail extends Ticket {
   history: TicketHistoryEntry[];
 }
 
+export type ConversationStatus = "ativa" | "encerrada";
+
 export interface Conversation {
   id: string;
   title: string | null;
+  status: ConversationStatus;
+  closed_at: string | null;
   created_at: string;
 }
 

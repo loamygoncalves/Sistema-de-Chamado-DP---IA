@@ -8,7 +8,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
 from app.models.enum_types import pg_enum
-from app.models.enums import ChatRole
+from app.models.enums import ChatConversationStatus, ChatRole
 from app.models.mixins import TimestampMixin, UUIDPKMixin
 
 
@@ -17,6 +17,10 @@ class ChatConversation(Base, UUIDPKMixin, TimestampMixin):
 
     user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))
     title: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    status: Mapped[ChatConversationStatus] = mapped_column(
+        pg_enum(ChatConversationStatus, "chat_conversation_status"), default=ChatConversationStatus.ATIVA
+    )
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     messages = relationship("ChatMessage", back_populates="conversation", cascade="all, delete-orphan")
 

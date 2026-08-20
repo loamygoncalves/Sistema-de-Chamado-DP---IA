@@ -12,18 +12,24 @@ chamado a cada pergunta que a IA não consegue responder com plena confiança.
 """
 
 import uuid
+from datetime import datetime, timezone
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.models.chat import ChatConversation, ChatMessage
-from app.models.enums import ChatDecision, ChatRole, TicketSource
+from app.models.enums import ChatConversationStatus, ChatDecision, ChatRole, TicketSource
 from app.models.user import User
 from app.services.ai_providers import get_llm_provider
 from app.services.ai_settings_service import get_ai_settings
 from app.services.embeddings import embedding_service
 from app.services.ticket_service import create_ticket
 from app.services.vector_store import vector_store
+
+
+class ConversationClosedError(Exception):
+    pass
 
 
 def _decide(confidence: float, threshold_auto: float, threshold_suggest: float) -> ChatDecision:
@@ -34,13 +40,34 @@ def _decide(confidence: float, threshold_auto: float, threshold_suggest: float) 
     return ChatDecision.AUTO_TICKET
 
 
+async def _recent_history(db: AsyncSession, conversation_id: uuid.UUID) -> list[dict]:
+    """Últimas mensagens da conversa (usuário+IA), em ordem cronológica, para
+    dar memória de verdade ao LLM — sem isso cada pergunta é respondida como
+    se fosse a primeira, e perguntas de acompanhamento ("e esse valor muda
+    se eu...") não fazem sentido para a IA. Limitada a
+    `CHAT_HISTORY_MAX_MESSAGES` para não inflar o custo por chamada."""
+    result = await db.execute(
+        select(ChatMessage)
+        .where(ChatMessage.conversation_id == conversation_id, ChatMessage.role != ChatRole.SYSTEM)
+        .order_by(ChatMessage.created_at.desc())
+        .limit(settings.CHAT_HISTORY_MAX_MESSAGES)
+    )
+    recent = list(reversed(result.scalars().all()))
+    return [{"role": m.role.value, "content": m.content} for m in recent]
+
+
 async def ask_question(
     db: AsyncSession, *, user: User, conversation: ChatConversation, question: str
 ) -> dict:
+    if conversation.status == ChatConversationStatus.ENCERRADA:
+        raise ConversationClosedError("Esta conversa foi encerrada. Inicie uma nova para continuar.")
+
     ai_settings = await get_ai_settings(db)
     top_k = int(ai_settings["rag_top_k"])
     threshold_auto = float(ai_settings["confidence_threshold_auto"])
     threshold_suggest = float(ai_settings["confidence_threshold_suggest"])
+
+    history = await _recent_history(db, conversation.id)
 
     department_id = str(user.department_id) if user.department_id else None
     query_vector = await embedding_service.embed_one(question)
@@ -65,7 +92,7 @@ async def ask_question(
             [],
         )
     else:
-        result = await provider.generate(question=question, context_blocks=context_blocks)
+        result = await provider.generate(question=question, context_blocks=context_blocks, history=history)
         answer, confidence, used_ids = result.answer, result.confidence, result.used_source_ids
 
     decision = _decide(confidence, threshold_auto, threshold_suggest)
@@ -74,7 +101,19 @@ async def ask_question(
         {"id": b["id"], "type": b["type"], "title": b["title"], "excerpt": b["text"][:300]} for b in matched_blocks
     ]
 
-    db.add(ChatMessage(conversation_id=conversation.id, role=ChatRole.USER, content=question))
+    # created_at é fixado explicitamente (em vez de confiar no default do
+    # servidor): `now()` do Postgres devolve o mesmo instante para todo INSERT
+    # dentro da mesma transação, então a pergunta e a resposta desta mesma
+    # rodada empatariam no timestamp — e _recent_history() depende da ordem
+    # cronológica para reconstruir a memória da conversa corretamente.
+    db.add(
+        ChatMessage(
+            conversation_id=conversation.id,
+            role=ChatRole.USER,
+            content=question,
+            created_at=datetime.now(timezone.utc),
+        )
+    )
 
     # Nenhum chamado é criado aqui — tanto em SUGGEST_TICKET quanto em
     # AUTO_TICKET, a resposta apenas convida o colaborador a confirmar a
@@ -85,6 +124,7 @@ async def ask_question(
         content=answer,
         confidence_score=round(confidence * 100, 2),
         sources=used_sources,
+        created_at=datetime.now(timezone.utc),
     )
     db.add(assistant_message)
     await db.flush()
@@ -136,3 +176,13 @@ async def open_ticket_from_suggestion(
     message.resulted_ticket_id = ticket.id
     await db.flush()
     return ticket
+
+
+async def close_conversation(db: AsyncSession, conversation: ChatConversation) -> ChatConversation:
+    """Encerra a conversa — a IA 'esquece' o histórico dela: uma nova conversa
+    (novo `conversation_id`) começa sem nenhuma memória desta. A conversa
+    encerrada continua consultável (histórico), só não aceita novas mensagens."""
+    conversation.status = ChatConversationStatus.ENCERRADA
+    conversation.closed_at = datetime.now(timezone.utc)
+    await db.flush()
+    return conversation

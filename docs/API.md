@@ -19,8 +19,9 @@ login e troca de token no backend). Todas as respostas de erro seguem
 | POST | `/chat/conversations` | Cria conversa | employee+ |
 | GET | `/chat/conversations` | Lista conversas do usuário | employee+ |
 | GET | `/chat/conversations/{id}` | Histórico de mensagens | employee+ (dono) |
-| POST | `/chat/conversations/{id}/messages` | Envia pergunta; retorna resposta da IA, score e fontes. **Nunca abre chamado sozinho** — `ticket` vem sempre `null` | employee+ |
+| POST | `/chat/conversations/{id}/messages` | Envia pergunta; retorna resposta da IA, score e fontes. **Nunca abre chamado sozinho** — `ticket` vem sempre `null`. As últimas `CHAT_HISTORY_MAX_MESSAGES` mensagens da conversa são enviadas como memória ao LLM, para que perguntas de acompanhamento façam sentido. `409` se a conversa já estiver encerrada | employee+ |
 | POST | `/chat/conversations/{id}/messages/{message_id}/open-ticket` | Cria o chamado somente após confirmação explícita do colaborador (faixas `suggest_ticket` 60–85% e `auto_ticket` <60%) | employee+ (dono) |
+| POST | `/chat/conversations/{id}/close` | Encerra a conversa — a IA "esquece" o histórico dela; uma nova conversa (`POST /chat/conversations`) não carrega nenhuma memória desta | employee+ (dono) |
 
 Resposta de `POST /messages`:
 ```json
