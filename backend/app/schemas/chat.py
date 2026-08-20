@@ -4,7 +4,7 @@ from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict
 
-from app.models.enums import ChatConversationStatus, ChatDecision, ChatRole
+from app.models.enums import ChatConversationStatus, ChatDecision, ChatRole, TicketPriority
 
 
 class ConversationCreate(BaseModel):
@@ -35,6 +35,8 @@ class SourceRef(BaseModel):
 class TicketRef(BaseModel):
     id: uuid.UUID
     ticket_number: str
+    priority: TicketPriority
+    sla_due_at: datetime | None
 
 
 class MessageResponse(BaseModel):

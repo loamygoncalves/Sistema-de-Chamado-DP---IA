@@ -81,13 +81,20 @@ export interface SourceRef {
 
 export type ChatDecision = "auto_answer" | "suggest_ticket" | "auto_ticket";
 
+export interface TicketRef {
+  id: string;
+  ticket_number: string;
+  priority: TicketPriority;
+  sla_due_at: string | null;
+}
+
 export interface MessageResponse {
   message_id: string;
   answer: string;
   confidence_score: number;
   decision: ChatDecision;
   sources: SourceRef[];
-  ticket: { id: string; ticket_number: string } | null;
+  ticket: TicketRef | null;
 }
 
 export interface ChatMessageRead {
@@ -106,8 +113,6 @@ export interface DashboardSummary {
   taxa_abertura_chamado: number;
   sla_medio_horas: number;
   tempo_medio_resolucao_horas: number;
-  nps_interno: number;
-  economia_estimada_reais: number;
 }
 
 export interface DepartmentBreakdown {

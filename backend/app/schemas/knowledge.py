@@ -54,7 +54,7 @@ class DocumentRead(BaseModel):
     external_file_id: str | None
 
 
-class DriveSyncResult(BaseModel):
+class LocalSyncResult(BaseModel):
     created: list[str]
     updated: list[str]
     skipped_unchanged: list[str]

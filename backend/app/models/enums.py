@@ -43,11 +43,12 @@ class DocumentType(str, enum.Enum):
     XLSX = "xlsx"
     CSV = "csv"
     PPTX = "pptx"
+    TXT = "txt"
 
 
 class DocumentSourceProvider(str, enum.Enum):
     UPLOAD = "upload"
-    GOOGLE_DRIVE = "google_drive"
+    LOCAL_FOLDER = "local_folder"
 
 
 class ChatRole(str, enum.Enum):

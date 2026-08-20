@@ -2,8 +2,13 @@
 
 import { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
-import type { Conversation, Department, MessageResponse } from "@/lib/types";
+import type { Conversation, Department, MessageResponse, TicketRef } from "@/lib/types";
 import ConfidenceBadge from "@/components/ConfidenceBadge";
+
+function formatSlaDeadline(slaDueAt: string | null): string {
+  if (!slaDueAt) return "a definir";
+  return new Date(slaDueAt).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
+}
 
 interface DisplayMessage {
   role: "user" | "assistant";
@@ -71,7 +76,7 @@ export default function ChatPanel() {
     const index = Number(departmentId) - 1;
     const department = departments[index];
     if (!department) return;
-    const ticket = await api.post<{ id: string; ticket_number: string }>(
+    const ticket = await api.post<TicketRef>(
       `/chat/conversations/${conversation.id}/messages/${messageId}/open-ticket?department_id=${department.id}`
     );
     setMessages((prev) =>
@@ -141,7 +146,9 @@ export default function ChatPanel() {
                   )}
                 {message.response.ticket && (
                   <p className="text-xs text-emerald-700">
-                    Chamado {message.response.ticket.ticket_number} aberto.
+                    Chamado <span className="font-semibold">{message.response.ticket.ticket_number}</span> aberto
+                    para o DP. Aguarde a análise de um analista responsável — prazo de resposta:{" "}
+                    <span className="font-semibold">{formatSlaDeadline(message.response.ticket.sla_due_at)}</span>.
                   </p>
                 )}
               </div>

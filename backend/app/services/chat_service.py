@@ -11,6 +11,7 @@ via confirmação explícita (`open_ticket_from_suggestion`). Isso evita abrir u
 chamado a cada pergunta que a IA não consegue responder com plena confiança.
 """
 
+import logging
 import uuid
 from datetime import datetime, timezone
 
@@ -21,11 +22,15 @@ from app.core.config import settings
 from app.models.chat import ChatConversation, ChatMessage
 from app.models.enums import ChatConversationStatus, ChatDecision, ChatRole, TicketSource
 from app.models.user import User
+from app.services import local_folder_sync_service
 from app.services.ai_providers import get_llm_provider
 from app.services.ai_settings_service import get_ai_settings
 from app.services.embeddings import embedding_service
+from app.services.local_folder_sync_service import LocalSyncNotConfigured
 from app.services.ticket_service import create_ticket
 from app.services.vector_store import vector_store
+
+logger = logging.getLogger(__name__)
 
 
 class ConversationClosedError(Exception):
@@ -61,6 +66,18 @@ async def ask_question(
 ) -> dict:
     if conversation.status == ChatConversationStatus.ENCERRADA:
         raise ConversationClosedError("Esta conversa foi encerrada. Inicie uma nova para continuar.")
+
+    # Lê a pasta local/de rede antes de responder, para que qualquer arquivo
+    # novo ou alterado desde a última pergunta já entre na base de
+    # conhecimento. Arquivos sem mudança são pulados (só um stat() por
+    # arquivo) — o custo de embedding só é pago por conteúdo de fato novo.
+    # Sem LOCAL_KNOWLEDGE_FOLDER configurado, isso é um no-op silencioso.
+    try:
+        await local_folder_sync_service.sync_folder(db)
+    except LocalSyncNotConfigured:
+        pass
+    except Exception:  # noqa: BLE001 — uma falha de sincronização não pode impedir a resposta
+        logger.warning("Falha ao sincronizar a pasta de conhecimento local", exc_info=True)
 
     ai_settings = await get_ai_settings(db)
     top_k = int(ai_settings["rag_top_k"])

@@ -24,17 +24,16 @@ spec:
             - secretRef:
                 name: beep-backend-secrets
           volumeMounts:
-            - name: google-drive-credentials
-              mountPath: /etc/google
+            - name: knowledge-base
+              mountPath: /data/knowledge-base
               readOnly: true
           resources:
             requests: { cpu: "250m", memory: "512Mi" }
             limits: { cpu: "1", memory: "1Gi" }
       volumes:
-        - name: google-drive-credentials
-          secret:
-            secretName: beep-google-drive-secrets
-            optional: true
+        - name: knowledge-base
+          persistentVolumeClaim:
+            claimName: beep-knowledge-base-pvc
 ---
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler

@@ -1,8 +1,8 @@
 """Extração e chunking de documentos corporativos para alimentar o RAG.
 
-Suporta PDF, DOCX, XLSX e CSV — os quatro formatos exigidos pela base de
-conhecimento (políticas, procedimentos, convenções coletivas, planilhas de
-regras). Cada chunk vira um ponto no Qdrant com metadados de rastreabilidade
+Suporta PDF, DOCX, XLSX, CSV, PPTX e TXT — inclui os dois formatos lidos
+diretamente da pasta de rede local (`local_folder_sync_service.py`): TXT e
+PDF. Cada chunk vira um ponto no Qdrant com metadados de rastreabilidade
 (documento de origem, página/planilha, departamento).
 """
 
@@ -83,12 +83,18 @@ def extract_pptx(content: bytes) -> list[dict]:
     return chunks
 
 
+def extract_txt(content: bytes) -> list[dict]:
+    text = content.decode("utf-8", errors="replace")
+    return [{"text": chunk, "metadata": {}} for chunk in _chunk_text(text)]
+
+
 EXTRACTORS = {
     "pdf": extract_pdf,
     "docx": extract_docx,
     "xlsx": extract_xlsx,
     "csv": extract_csv,
     "pptx": extract_pptx,
+    "txt": extract_txt,
 }
 
 

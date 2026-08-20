@@ -9,9 +9,9 @@ from app.db.session import get_db
 from app.models.enums import DocumentType
 from app.models.knowledge import FAQ, Document, KnowledgeArticle
 from app.models.user import User
-from app.schemas.knowledge import ArticleCreate, ArticleRead, DocumentRead, DriveSyncResult, FAQCreate, FAQRead
-from app.services import drive_sync_service, knowledge_service
-from app.services.drive_sync_service import DriveSyncNotConfigured
+from app.schemas.knowledge import ArticleCreate, ArticleRead, DocumentRead, FAQCreate, FAQRead, LocalSyncResult
+from app.services import knowledge_service, local_folder_sync_service
+from app.services.local_folder_sync_service import LocalSyncNotConfigured
 
 router = APIRouter(prefix="/knowledge", tags=["knowledge"])
 
@@ -58,7 +58,7 @@ async def upload_document(
         file_type = DocumentType(extension)
     except ValueError as exc:
         raise HTTPException(
-            status.HTTP_400_BAD_REQUEST, "Formato não suportado. Use PDF, DOCX, XLSX, CSV ou PPTX."
+            status.HTTP_400_BAD_REQUEST, "Formato não suportado. Use PDF, DOCX, XLSX, CSV, PPTX ou TXT."
         ) from exc
 
     content = await file.read()
@@ -78,17 +78,18 @@ async def get_document(document_id: uuid.UUID, admin: User = Depends(require_adm
     return document
 
 
-@router.post("/documents/sync-drive", response_model=DriveSyncResult)
-async def sync_drive_documents(admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
-    """Dispara sob demanda a sincronização com a pasta do Google Drive
-    configurada (`GOOGLE_DRIVE_FOLDER_ID`), sem esperar o próximo ciclo do
-    Celery Beat."""
+@router.post("/documents/sync-local", response_model=LocalSyncResult)
+async def sync_local_documents(admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+    """Dispara sob demanda a sincronização com a pasta local/de rede
+    configurada (`LOCAL_KNOWLEDGE_FOLDER`). A mesma sincronização também roda
+    automaticamente no início de cada resposta da IA — este endpoint serve
+    para conferir o resultado sem precisar fazer uma pergunta no chat."""
     try:
-        result = await drive_sync_service.sync_folder(db)
-    except DriveSyncNotConfigured as exc:
+        result = await local_folder_sync_service.sync_folder(db)
+    except LocalSyncNotConfigured as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
     await db.commit()
-    return DriveSyncResult(
+    return LocalSyncResult(
         created=result.created,
         updated=result.updated,
         skipped_unchanged=result.skipped_unchanged,

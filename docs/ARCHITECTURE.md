@@ -132,42 +132,50 @@ flowchart LR
     G --> H[Disponível para próximas consultas RAG]
 ```
 
-## 4.1 Sincronização automática com Google Drive
+## 4.1 Sincronização automática com pasta local/de rede
 
-A base de conhecimento pode ser mantida a partir de uma pasta do Google Drive,
-sem reingestão manual: o Celery Beat dispara `sync_folder()`
-(`app/services/drive_sync_service.py`) a cada `DRIVE_SYNC_INTERVAL_MINUTES`
-(padrão 15min) quando `GOOGLE_DRIVE_SYNC_ENABLED=true`.
+A base de conhecimento é mantida a partir de uma pasta local ou de rede
+(montada no container/pod), sem reingestão manual e **sem nenhuma API
+externa** — 100% local e sem custo. `sync_folder()`
+(`app/services/local_folder_sync_service.py`) roda automaticamente no início
+de toda resposta da IA (`chat_service.ask_question`), então a base reflete o
+conteúdo mais recente da pasta antes de cada resposta.
 
 ```mermaid
 flowchart LR
-    A[Celery Beat — a cada N min] --> B[sync_folder]
-    B --> C[Google Drive API: listar arquivos da pasta]
+    A[Nova pergunta no chat] --> B[sync_folder]
+    B --> C[Listar arquivos .txt/.pdf da pasta]
     C --> D{Arquivo novo, alterado ou já sincronizado?}
-    D -->|Novo| E[Baixar/exportar conteúdo]
-    D -->|modifiedTime mais recente| E
-    D -->|Sem mudança| F[Pular — sem custo de download/embedding]
+    D -->|Novo| E[Ler conteúdo do arquivo]
+    D -->|mtime mais recente| E
+    D -->|Sem mudança| F[Pular — só um stat(), sem custo de leitura/embedding]
     E --> G[ingest_document / reingest_document]
     G --> H[Gerar embeddings e indexar no Qdrant]
+    F --> I[Responder a pergunta]
+    H --> I
 ```
 
 Detalhes:
-- Autenticação via conta de serviço do Google (`GOOGLE_SERVICE_ACCOUNT_FILE`), com a
-  pasta compartilhada com o `client_email` da conta (papel "Leitor").
-- Arquivos nativos do Google Workspace (Docs/Sheets/Slides) são exportados para
-  o formato binário equivalente (docx/xlsx/pptx) antes da ingestão.
-- Cada arquivo é rastreado pelo `external_file_id` (id no Drive); a comparação
-  de `modifiedTime` evita reprocessar arquivos sem mudança.
+- Sem credenciais, sem conta de serviço, sem chamada de rede a nenhum provedor —
+  só leitura de arquivo (`Path.read_bytes()`).
+- Formatos suportados: `.txt` e `.pdf`.
+- Cada arquivo é rastreado pelo caminho relativo à pasta (`external_file_id`);
+  a comparação de `mtime` (data de modificação do arquivo) evita reprocessar
+  arquivos sem mudança — só um `stat()` por arquivo a cada pergunta, o custo de
+  leitura/embedding só é pago por conteúdo de fato novo ou alterado.
 - Reindexação usa ids de ponto determinísticos no Qdrant (UUID5 de
   `documento_id:índice_do_chunk`), então atualizar um arquivo sobrescreve seus
   vetores em vez de duplicá-los.
-- Também pode ser disparada sob demanda via `POST /knowledge/documents/sync-drive`
-  (papel admin), sem esperar o próximo ciclo do Beat.
-- Um erro em um arquivo (ex.: formato corrompido) não interrompe a sincronização
+- Também pode ser disparada sob demanda via `POST /knowledge/documents/sync-local`
+  (papel admin), sem precisar fazer uma pergunta no chat.
+- Um erro em um arquivo (ex.: PDF corrompido) não interrompe a sincronização
   dos demais — fica registrado em `errors` no resultado.
+- Uma falha na sincronização (ex.: pasta de rede temporariamente indisponível)
+  não impede a IA de responder — ela só loga um aviso e segue com a base já
+  indexada.
 
-Passo a passo de configuração (criação da conta de serviço no Google Cloud,
-compartilhamento da pasta, variáveis de ambiente): `docs/GOOGLE_DRIVE_SETUP.md`.
+Passo a passo de configuração (montar a pasta de rede no container/pod,
+variáveis de ambiente): `docs/LOCAL_KNOWLEDGE_SETUP.md`.
 
 ## 5. Camadas e responsabilidades
 

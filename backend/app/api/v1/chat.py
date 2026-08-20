@@ -75,6 +75,10 @@ async def close(conversation_id: uuid.UUID, user: User = Depends(require_employe
     return conversation
 
 
+def _ticket_ref(ticket) -> TicketRef:
+    return TicketRef(id=ticket.id, ticket_number=ticket.ticket_number, priority=ticket.priority, sla_due_at=ticket.sla_due_at)
+
+
 @router.post("/conversations/{conversation_id}/messages", response_model=MessageResponse)
 async def post_message(
     conversation_id: uuid.UUID,
@@ -96,11 +100,11 @@ async def post_message(
         confidence_score=result["confidence_score"],
         decision=result["decision"],
         sources=[SourceRef(**s) for s in result["sources"]],
-        ticket=TicketRef(id=ticket.id, ticket_number=ticket.ticket_number) if ticket else None,
+        ticket=_ticket_ref(ticket) if ticket else None,
     )
 
 
-@router.post("/conversations/{conversation_id}/messages/{message_id}/open-ticket")
+@router.post("/conversations/{conversation_id}/messages/{message_id}/open-ticket", response_model=TicketRef)
 async def open_ticket(
     conversation_id: uuid.UUID,
     message_id: uuid.UUID,
@@ -117,4 +121,4 @@ async def open_ticket(
 
     ticket = await open_ticket_from_suggestion(db, user=user, message=message, department_id=department_id)
     await db.commit()
-    return {"id": ticket.id, "ticket_number": ticket.ticket_number}
+    return _ticket_ref(ticket)

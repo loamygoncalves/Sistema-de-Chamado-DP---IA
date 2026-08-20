@@ -1,0 +1,31 @@
+# Pasta de rede compartilhada, montada como somente leitura nos pods
+# backend e worker em /data/knowledge-base (ver LOCAL_KNOWLEDGE_FOLDER no
+# ConfigMap). Exemplo abaixo usa NFS — se a pasta compartilhada for um share
+# Windows/SMB, troque para um CSI driver de CIFS/SMB (ex.: csi-driver-smb) e
+# ajuste `nfs:` por `csi:` conforme a documentação do driver escolhido.
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: beep-knowledge-base-pv
+spec:
+  capacity:
+    storage: 10Gi
+  accessModes:
+    - ReadOnlyMany
+  nfs:
+    server: REPLACE_ME # ex.: fileserver.beepsaude.local
+    path: /export/sistema-chamado-ia # caminho da pasta compartilhada no servidor
+  persistentVolumeReclaimPolicy: Retain
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: beep-knowledge-base-pvc
+  namespace: beep-ai-service-desk
+spec:
+  accessModes:
+    - ReadOnlyMany
+  resources:
+    requests:
+      storage: 10Gi
+  volumeName: beep-knowledge-base-pv

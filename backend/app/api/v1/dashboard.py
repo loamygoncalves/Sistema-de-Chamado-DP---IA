@@ -3,7 +3,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import require_admin, require_department_lead
+from app.core.deps import require_department_lead
 from app.db.session import get_db
 from app.models.user import User
 from app.schemas.dashboard import DashboardSummary, DepartmentBreakdown
@@ -32,10 +32,3 @@ async def by_department(user: User = Depends(require_department_lead), db: Async
 async def sla(user: User = Depends(require_department_lead), db: AsyncSession = Depends(get_db)):
     data = await dashboard_service.get_summary(db, None, None)
     return {"sla_medio_horas": data["sla_medio_horas"], "tempo_medio_resolucao_horas": data["tempo_medio_resolucao_horas"]}
-
-
-@router.get("/savings")
-async def savings(admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
-    data = await dashboard_service.get_summary(db, None, None)
-    breakdown = await dashboard_service.get_source_breakdown(db)
-    return {"economia_estimada_reais": data["economia_estimada_reais"], "chamados_por_origem": breakdown}

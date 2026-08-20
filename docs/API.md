@@ -64,12 +64,12 @@ chamado a cada pergunta que a IA não consiga responder com segurança.
 | POST | `/knowledge/articles` | Cria artigo manual | analyst+ |
 | GET | `/knowledge/faqs` | Lista FAQs | employee+ |
 | POST | `/knowledge/faqs` | Cria FAQ | admin |
-| POST | `/knowledge/documents` | Upload de documento (PDF/DOCX/XLSX/CSV/PPTX) para ingestão | admin |
+| POST | `/knowledge/documents` | Upload de documento (PDF/DOCX/XLSX/CSV/PPTX/TXT) para ingestão | admin |
 | GET | `/knowledge/documents/{id}` | Status de indexação | admin |
-| POST | `/knowledge/documents/sync-drive` | Dispara sob demanda a sincronização com a pasta do Google Drive configurada (`GOOGLE_DRIVE_FOLDER_ID`), sem esperar o próximo ciclo do Celery Beat. Retorna `{created, updated, skipped_unchanged, skipped_unsupported, errors}` (nomes dos arquivos em cada lista). `400` se `GOOGLE_DRIVE_FOLDER_ID`/`GOOGLE_SERVICE_ACCOUNT_FILE` não estiverem configurados | admin |
+| POST | `/knowledge/documents/sync-local` | Dispara sob demanda a sincronização com a pasta local/de rede configurada (`LOCAL_KNOWLEDGE_FOLDER`). Retorna `{created, updated, skipped_unchanged, skipped_unsupported, errors}` (caminhos dos arquivos em cada lista, relativos à pasta). `400` se `LOCAL_KNOWLEDGE_FOLDER` não estiver configurado ou não existir | admin |
 
-A mesma sincronização também roda automaticamente a cada `DRIVE_SYNC_INTERVAL_MINUTES`
-via Celery Beat quando `GOOGLE_DRIVE_SYNC_ENABLED=true` — ver `docs/ARCHITECTURE.md`.
+A mesma sincronização também roda automaticamente no início de cada resposta
+da IA (`POST /chat/conversations/{id}/messages`) — ver `docs/ARCHITECTURE.md`.
 
 ## Departamentos
 | Método | Rota | Descrição | Papéis |
@@ -90,7 +90,6 @@ via Celery Beat quando `GOOGLE_DRIVE_SYNC_ENABLED=true` — ver `docs/ARCHITECTU
 | GET | `/dashboard/summary` | KPIs agregados (período via `?from=&to=`) | department_lead+ |
 | GET | `/dashboard/by-department` | Chamados e taxa de resolução por área | department_lead+ |
 | GET | `/dashboard/sla` | SLA médio e tempo médio de resolução | department_lead+ |
-| GET | `/dashboard/savings` | Economia estimada pela automação | admin |
 
 `GET /dashboard/summary` retorna:
 ```json
@@ -100,11 +99,15 @@ via Celery Beat quando `GOOGLE_DRIVE_SYNC_ENABLED=true` — ver `docs/ARCHITECTU
   "taxa_resolucao_ia": 0.768,
   "taxa_abertura_chamado": 0.232,
   "sla_medio_horas": 6.4,
-  "tempo_medio_resolucao_horas": 9.1,
-  "nps_interno": 74,
-  "economia_estimada_reais": 187650.0
+  "tempo_medio_resolucao_horas": 9.1
 }
 ```
+
+NPS e economia estimada pela automação foram removidos do dashboard por enquanto
+— não havia metodologia validada por trás desses dois números (NPS dependia de
+poucas avaliações reais de chamados; a economia usava um custo médio por
+atendimento assumido, não calibrado com dados da Beep). Podem voltar quando
+houver uma base de cálculo confiável.
 
 ## Auditoria
 | Método | Rota | Descrição | Papéis |

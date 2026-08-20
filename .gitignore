@@ -27,6 +27,10 @@ npm-debug.log*
 # Docker volumes (local dev)
 infra/.data/
 
+# Arquivos de teste soltos na pasta local de conhecimento (dev)
+infra/knowledge-base/*
+!infra/knowledge-base/README.md
+
 # Terraform / k8s local
 *.tfstate
 *.tfstate.backup

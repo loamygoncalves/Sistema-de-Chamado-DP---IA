@@ -46,11 +46,6 @@ export default function DashboardPage() {
         <StatCard label="Taxa de abertura de chamado" value={`${(summary.taxa_abertura_chamado * 100).toFixed(1)}%`} />
         <StatCard label="SLA médio" value={`${summary.sla_medio_horas.toFixed(1)}h`} />
         <StatCard label="Tempo médio de resolução" value={`${summary.tempo_medio_resolucao_horas.toFixed(1)}h`} />
-        <StatCard label="NPS interno" value={summary.nps_interno.toFixed(0)} />
-        <StatCard
-          label="Economia gerada pela automação"
-          value={summary.economia_estimada_reais.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
-        />
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">

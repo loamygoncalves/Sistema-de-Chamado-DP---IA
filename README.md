@@ -70,15 +70,16 @@ vez de criar duplicados.
   A IA nunca abre um chamado sozinha — em qualquer faixa abaixo de 85%, a
   abertura depende de confirmação explícita do colaborador.
 
-## Sincronização com Google Drive
+## Sincronização com pasta local/de rede
 
-A base de conhecimento pode ficar sincronizada automaticamente com uma pasta do
-Google Drive — basta atualizar o arquivo na pasta que o próximo ciclo do
-Celery Beat reingere a versão nova (sem subir nada manualmente pelo painel).
-Configuração via `GOOGLE_DRIVE_SYNC_ENABLED`, `GOOGLE_DRIVE_FOLDER_ID` e
-`GOOGLE_SERVICE_ACCOUNT_FILE` (ver `.env.example`); detalhes de funcionamento em
-`docs/ARCHITECTURE.md` (seção 4.1). Também dá para forçar uma sincronização
-imediata via `POST /knowledge/documents/sync-drive` (admin).
+A base de conhecimento fica sincronizada automaticamente com uma pasta local
+ou de rede montada no servidor — **100% local, sem custo e sem nenhuma API
+externa**. Basta atualizar (ou adicionar) um arquivo `.txt`/`.pdf` na pasta
+que a próxima pergunta no chat já reingere a versão nova, sem subir nada
+manualmente pelo painel. Configuração via `LOCAL_KNOWLEDGE_FOLDER` (ver
+`.env.example`); detalhes de funcionamento em `docs/ARCHITECTURE.md` (seção
+4.1). Também dá para forçar uma sincronização imediata via
+`POST /knowledge/documents/sync-local` (admin).
 
-Passo a passo completo para habilitar (criar a conta de serviço do Google,
-compartilhar a pasta, configurar o servidor): `docs/GOOGLE_DRIVE_SETUP.md`.
+Passo a passo completo para habilitar (montar a pasta de rede localmente ou
+no Kubernetes): `docs/LOCAL_KNOWLEDGE_SETUP.md`.

@@ -8,8 +8,6 @@ class DashboardSummary(BaseModel):
     taxa_abertura_chamado: float
     sla_medio_horas: float
     tempo_medio_resolucao_horas: float
-    nps_interno: float
-    economia_estimada_reais: float
 
 
 class DepartmentBreakdown(BaseModel):
