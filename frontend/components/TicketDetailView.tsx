@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
-import type { Department, TicketDetail, TicketPriority, TicketStatus } from "@/lib/types";
+import type { Department, TicketDetail, TicketPriority, TicketStatus, User } from "@/lib/types";
 import { StatusBadge, PriorityBadge } from "@/components/TicketStatusBadge";
 
 const STATUS_OPTIONS: TicketStatus[] = [
@@ -19,6 +19,7 @@ export default function TicketDetailView({ ticketId, isAnalystView = false }: { 
   const { user } = useAuth();
   const [ticket, setTicket] = useState<TicketDetail | null>(null);
   const [departments, setDepartments] = useState<Department[]>([]);
+  const [analysts, setAnalysts] = useState<User[]>([]);
   const [comment, setComment] = useState("");
   const [rating, setRating] = useState(5);
   const [busy, setBusy] = useState(false);
@@ -31,7 +32,10 @@ export default function TicketDetailView({ ticketId, isAnalystView = false }: { 
   useEffect(() => {
     reload();
     api.get<Department[]>("/departments").then(setDepartments);
+    api.get<User[]>("/users/analysts").then(setAnalysts);
   }, [reload]);
+
+  const assignedAnalyst = analysts.find((a) => a.id === ticket?.assigned_to);
 
   if (!ticket || !user) return <p className="text-slate-500">Carregando chamado...</p>;
 
@@ -58,6 +62,9 @@ export default function TicketDetailView({ ticketId, isAnalystView = false }: { 
             </h1>
             <p className="mt-1 text-sm text-slate-500">
               Aberto em {new Date(ticket.created_at).toLocaleString("pt-BR")} · Origem: {ticket.source}
+              {ticket.assigned_to && (
+                <> · Analista responsável: {assignedAnalyst ? assignedAnalyst.name : "—"}</>
+              )}
             </p>
           </div>
           <div className="flex gap-2">
@@ -87,6 +94,21 @@ export default function TicketDetailView({ ticketId, isAnalystView = false }: { 
               {departments.map((d) => (
                 <option key={d.id} value={d.id}>
                   {d.name}
+                </option>
+              ))}
+            </select>
+            <select
+              value={ticket.assigned_to ?? ""}
+              disabled={busy}
+              onChange={(e) => e.target.value && withBusy(() => api.post(`/tickets/${ticket.id}/transfer`, { assigned_to: e.target.value }))}
+              className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+            >
+              <option value="" disabled>
+                Vincular a analista do DP...
+              </option>
+              {analysts.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name}
                 </option>
               ))}
             </select>

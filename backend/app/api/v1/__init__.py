@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from app.api.v1 import audit, auth, chat, dashboard, departments, knowledge, settings, tickets
+from app.api.v1 import audit, auth, chat, dashboard, departments, knowledge, settings, tickets, users
 
 api_router = APIRouter()
 api_router.include_router(auth.router)
@@ -11,3 +11,4 @@ api_router.include_router(knowledge.router)
 api_router.include_router(settings.router)
 api_router.include_router(dashboard.router)
 api_router.include_router(audit.router)
+api_router.include_router(users.router)

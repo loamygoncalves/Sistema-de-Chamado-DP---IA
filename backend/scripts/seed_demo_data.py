@@ -48,6 +48,23 @@ DEMO_USERS = [
     },
 ]
 
+# Analistas reais do DP que atendem os chamados abertos pela IA/colaboradores —
+# ficam disponíveis em GET /users/analysts para vincular um chamado a um deles
+# (POST /tickets/{id}/transfer com assigned_to). E-mails seguem a convenção
+# nome.sobrenome@beepsaude.com.br; ajuste aqui se algum divergir, e preencha
+# `identity_provider_sub` quando o SSO de cada analista for configurado no Keycloak.
+_DP_ANALYST_NAMESPACE = uuid.UUID("2f6a6c1e-2b3a-4a7e-9c4a-1d2e3f4a5b6c")
+DP_ANALYSTS = [
+    {"name": "Loamy Gonçalves", "email": "loamy.goncalves@beepsaude.com.br"},
+    {"name": "Thayana Lopes", "email": "thayana.lopes@beepsaude.com.br"},
+    {"name": "Pablo Belizario", "email": "pablo.belizario@beepsaude.com.br"},
+    {"name": "Ingrid Silva", "email": "ingrid.silva@beepsaude.com.br"},
+    {"name": "Karina Brasil", "email": "karina.brasil@beepsaude.com.br"},
+    {"name": "Ellen de Abreu", "email": "ellen.abreu@beepsaude.com.br"},
+    {"name": "Arianne Lima", "email": "arianne.lima@beepsaude.com.br"},
+    {"name": "Eduardo Gomes", "email": "eduardo.gomes@beepsaude.com.br"},
+]
+
 # Conteúdo extraído do "Guia do Colaborador Detalhado" (documento oficial de DP da
 # BEEP Saúde) + complementos do deck de onboarding, para que a IA já nasça
 # respondendo com informação real de benefícios e processos de DP.
@@ -254,6 +271,20 @@ async def seed() -> None:
                         identity_provider_sub=str(demo["id"]),
                     )
                 )
+        await db.flush()
+
+        existing_analyst_emails = {u.email for u in (await db.execute(select(User))).scalars().all()}
+        for analyst in DP_ANALYSTS:
+            if analyst["email"] in existing_analyst_emails:
+                continue
+            db.add(
+                User(
+                    id=uuid.uuid5(_DP_ANALYST_NAMESPACE, analyst["email"]),
+                    name=analyst["name"],
+                    email=analyst["email"],
+                    role=UserRole.ANALYST,
+                )
+            )
         await db.flush()
 
         existing_faq_questions = {f.question for f in (await db.execute(select(FAQ))).scalars().all()}
