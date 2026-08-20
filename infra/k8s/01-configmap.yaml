@@ -33,12 +33,11 @@ data:
   CORS_ORIGINS: '["https://operacoes-playground.internal.beepsaude.com.br"]'
   LOCAL_KNOWLEDGE_FOLDER: "/data/knowledge-base"
   LOCAL_KNOWLEDGE_DEFAULT_DEPARTMENT_SLUG: ""
----
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: beep-frontend-config
-  namespace: beep-ai-service-desk
-data:
-  NEXT_PUBLIC_API_BASE_URL: "https://operacoes-playground.internal.beepsaude.com.br/api/v1"
-  NEXT_PUBLIC_APP_NAME: "BEEP AI Service Desk"
+  AWS_REGION: "us-east-1"
+  BEDROCK_MODEL_ID: ""
+  BEDROCK_EMBEDDING_MODEL_ID: "amazon.titan-embed-text-v2:0"
+
+# Não existe mais um ConfigMap para o frontend: NEXT_PUBLIC_* precisa estar
+# presente durante `next build` (é embutido no bundle do cliente ali), então
+# vai como build-arg no CI/CD — ver frontend/Dockerfile e
+# .github/workflows/ci-cd.yml. Uma env de runtime no pod não tem efeito.

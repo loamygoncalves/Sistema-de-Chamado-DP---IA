@@ -33,7 +33,7 @@ flowchart TB
 
     subgraph AI["Camada de IA"]
         RAG["RAG Engine"]
-        Providers["Provedores de LLM<br/>Claude / OpenAI (configurável)"]
+        Providers["Provedores de LLM<br/>Claude (direto ou via Amazon Bedrock) / OpenAI (configurável)"]
         Embedder["Serviço de Embeddings"]
     end
 

@@ -1,0 +1,28 @@
+# Copie para terraform.tfvars e preencha. Nunca commite o terraform.tfvars
+# de verdade (já está no .gitignore) — ele carrega segredos em texto puro.
+
+aws_region   = "us-east-1"
+project_name = "beep-service-desk"
+environment  = "production"
+
+# Deixe em branco para subir só em HTTP (ok para validar o piloto).
+# Preencha os dois para HTTPS com domínio próprio antes de ir pra produção real.
+domain_name     = ""
+route53_zone_id = ""
+
+# IA — Bedrock é o padrão (sem chave de API separada, fatura tudo na AWS).
+default_llm_provider = "bedrock"
+embedding_provider   = "bedrock"
+# Preencha depois de solicitar acesso ao modelo no console do Bedrock:
+bedrock_model_id = ""
+
+# Só preencha se NÃO for usar Bedrock:
+# anthropic_api_key = ""
+# openai_api_key    = ""
+
+# SSO corporativo real da Beep (Azure AD ou Keycloak já existente) — este
+# Terraform não cria um Keycloak novo.
+auth_provider      = "azure_ad"
+oidc_issuer        = ""
+oidc_client_id     = ""
+oidc_client_secret = ""

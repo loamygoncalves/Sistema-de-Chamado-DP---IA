@@ -1,4 +1,5 @@
-"""Provedores de LLM configuráveis (Claude / OpenAI) por trás de uma interface comum.
+"""Provedores de LLM configuráveis (Claude direto, OpenAI, ou Claude via Amazon
+Bedrock) por trás de uma interface comum.
 
 Trocar de provedor é uma questão de configuração (`DEFAULT_LLM_PROVIDER` ou o valor
 salvo em `ai_settings`), sem alterar o restante do pipeline de RAG.
@@ -100,6 +101,22 @@ class AnthropicProvider(LLMProvider):
         return _parse_json_response(message.content[0].text)
 
 
+class BedrockProvider(AnthropicProvider):
+    """Claude via Amazon Bedrock — mesma interface do SDK da Anthropic
+    (`.messages.create()`), só troca a autenticação: em vez de uma
+    ANTHROPIC_API_KEY, usa a role IAM da task/instância (credenciais
+    resolvidas automaticamente pelo boto3). Requer solicitar acesso ao
+    modelo desejado no console do Bedrock antes do primeiro uso."""
+
+    def __init__(self) -> None:
+        import anthropic
+
+        if not settings.BEDROCK_MODEL_ID:
+            raise ValueError("BEDROCK_MODEL_ID não configurado — confirme o id do modelo no console do Bedrock")
+        self._client = anthropic.AsyncAnthropicBedrock(aws_region=settings.AWS_REGION)
+        self._model = settings.BEDROCK_MODEL_ID
+
+
 class OpenAIProvider(LLMProvider):
     def __init__(self) -> None:
         from openai import AsyncOpenAI
@@ -146,4 +163,6 @@ def get_llm_provider(provider_name: str | None = None) -> LLMProvider:
         return AnthropicProvider()
     if name == "openai":
         return OpenAIProvider()
+    if name == "bedrock":
+        return BedrockProvider()
     raise ValueError(f"Provedor de IA desconhecido: {name}")

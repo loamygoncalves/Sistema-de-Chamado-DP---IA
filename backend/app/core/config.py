@@ -37,13 +37,20 @@ class Settings(BaseSettings):
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
     # AI providers
-    DEFAULT_LLM_PROVIDER: str = "anthropic"  # anthropic | openai
+    DEFAULT_LLM_PROVIDER: str = "anthropic"  # anthropic | openai | bedrock
     ANTHROPIC_API_KEY: str | None = None
     ANTHROPIC_MODEL: str = "claude-sonnet-5"
     OPENAI_API_KEY: str | None = None
     OPENAI_MODEL: str = "gpt-4o"
-    EMBEDDING_PROVIDER: str = "openai"  # openai | anthropic-compatible
+    EMBEDDING_PROVIDER: str = "openai"  # openai | bedrock
     EMBEDDING_MODEL: str = "text-embedding-3-small"
+
+    # Amazon Bedrock (Claude e Titan Embeddings dentro da própria conta AWS,
+    # sem chave de API separada — usa a role IAM da task do ECS/instância).
+    # Requer solicitar acesso ao modelo no console do Bedrock antes de usar.
+    AWS_REGION: str = "us-east-1"
+    BEDROCK_MODEL_ID: str | None = None  # ex.: "anthropic.claude-sonnet-4-5-20250929-v1:0" — confirme o id exato no console do Bedrock
+    BEDROCK_EMBEDDING_MODEL_ID: str = "amazon.titan-embed-text-v2:0"
 
     # Confidence routing thresholds (parametrizable, overridable via ai_settings table)
     CONFIDENCE_THRESHOLD_AUTO: float = 0.85

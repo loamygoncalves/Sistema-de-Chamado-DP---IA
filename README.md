@@ -15,7 +15,7 @@ Host alvo: `https://operacoes-playground.internal.beepsaude.com.br`
 - **Banco de dados**: PostgreSQL 16.
 - **Cache / filas**: Redis (cache + broker do Celery).
 - **Vetorização**: Qdrant.
-- **IA**: Claude (Anthropic) e OpenAI, com provedor configurável via variável de ambiente.
+- **IA**: Claude via Anthropic, OpenAI, ou Amazon Bedrock — provedor configurável via variável de ambiente.
 - **Autenticação**: OIDC (Keycloak ou Azure AD) + JWT interno + RBAC.
 
 Consulte `docs/ARCHITECTURE.md` para a arquitetura completa, `docs/DATABASE.md` para o
@@ -29,7 +29,8 @@ schema do banco e `docs/API.md` para o contrato da API REST.
 ├── frontend/           # Next.js — portais e dashboard
 ├── infra/
 │   ├── docker-compose.yml
-│   └── k8s/            # Manifests Kubernetes
+│   ├── k8s/            # Manifests Kubernetes
+│   └── aws/            # Terraform — deploy na AWS (ECS Fargate)
 ├── .github/workflows/  # Pipeline CI/CD
 └── docs/               # Arquitetura, banco de dados, API
 ```
@@ -83,3 +84,11 @@ manualmente pelo painel. Configuração via `LOCAL_KNOWLEDGE_FOLDER` (ver
 
 Passo a passo completo para habilitar (montar a pasta de rede localmente ou
 no Kubernetes): `docs/LOCAL_KNOWLEDGE_SETUP.md`.
+
+## Deploy em produção
+
+- **AWS (ECS Fargate)**: Terraform pronto em `infra/aws/` — VPC, RDS,
+  ElastiCache, EFS, S3, Qdrant self-hosted e Amazon Bedrock para o Claude
+  (sem chave de API separada). Passo a passo completo, do zero (incluindo
+  pedir acesso ao modelo no Bedrock): `docs/AWS_DEPLOYMENT.md`.
+- **Kubernetes**: manifests em `infra/k8s/` — ver `infra/k8s/README.md`.

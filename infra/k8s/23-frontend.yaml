@@ -17,12 +17,11 @@ spec:
     spec:
       containers:
         - name: frontend
+          # NEXT_PUBLIC_* já vem embutido na imagem (build-args no CI/CD) —
+          # não há nenhuma env de runtime para injetar aqui.
           image: registry.beepsaude.com.br/beep-ai-service-desk/frontend:latest
           ports:
             - containerPort: 3000
-          envFrom:
-            - configMapRef:
-                name: beep-frontend-config
           readinessProbe:
             httpGet: { path: /, port: 3000 }
             initialDelaySeconds: 10

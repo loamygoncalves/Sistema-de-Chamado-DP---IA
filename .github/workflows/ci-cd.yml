@@ -113,6 +113,12 @@ jobs:
           context: frontend
           file: frontend/Dockerfile
           push: true
+          # NEXT_PUBLIC_* precisa ir como build-arg — o Next.js embute esses
+          # valores no bundle do cliente durante `next build`, dentro da
+          # imagem; setar como env do container em runtime não tem efeito.
+          build-args: |
+            NEXT_PUBLIC_API_BASE_URL=https://operacoes-playground.internal.beepsaude.com.br/api/v1
+            NEXT_PUBLIC_APP_NAME=BEEP AI Service Desk
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_FRONTEND }}:${{ github.sha }}
             ${{ env.REGISTRY }}/${{ env.IMAGE_FRONTEND }}:latest

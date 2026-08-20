@@ -1,0 +1,91 @@
+name: Deploy AWS (ECS Fargate)
+
+# Disparo manual só — ative isso quando a conta AWS e o infra/aws/terraform.tfvars
+# já estiverem prontos (ver docs/AWS_DEPLOYMENT.md). Enquanto isso, não atrapalha
+# o pipeline de CI normal (backend-lint-test / frontend-lint-build no ci-cd.yml).
+on:
+  workflow_dispatch: {}
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION }}
+  TF_DIR: infra/aws
+
+jobs:
+  build-push-deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      id-token: write # necessário para OIDC (configure-aws-credentials sem chave fixa)
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configurar credenciais AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.0"
+
+      - name: Terraform init
+        working-directory: ${{ env.TF_DIR }}
+        run: terraform init
+
+      - name: Login no ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Nomes dos repositórios ECR
+        id: repos
+        working-directory: ${{ env.TF_DIR }}
+        run: |
+          terraform output -raw ecr_backend_repository_url  | sed 's/^/backend=/'   >> "$GITHUB_OUTPUT"
+          terraform output -raw ecr_worker_repository_url   | sed 's/^/worker=/'    >> "$GITHUB_OUTPUT"
+          terraform output -raw ecr_frontend_repository_url | sed 's/^/frontend=/'  >> "$GITHUB_OUTPUT"
+          terraform output -raw app_url                     | sed 's/^/app_url=/'   >> "$GITHUB_OUTPUT"
+
+      - name: Build & push — backend
+        run: |
+          docker build -t "${{ steps.repos.outputs.backend }}:${{ github.sha }}" -f backend/Dockerfile backend
+          docker push "${{ steps.repos.outputs.backend }}:${{ github.sha }}"
+
+      - name: Build & push — worker
+        run: |
+          docker build -t "${{ steps.repos.outputs.worker }}:${{ github.sha }}" -f backend/Dockerfile.worker backend
+          docker push "${{ steps.repos.outputs.worker }}:${{ github.sha }}"
+
+      - name: Build & push — frontend
+        run: |
+          docker build \
+            --build-arg NEXT_PUBLIC_API_BASE_URL="${{ steps.repos.outputs.app_url }}/api/v1" \
+            --build-arg NEXT_PUBLIC_APP_NAME="BEEP AI Service Desk" \
+            -t "${{ steps.repos.outputs.frontend }}:${{ github.sha }}" -f frontend/Dockerfile frontend
+          docker push "${{ steps.repos.outputs.frontend }}:${{ github.sha }}"
+
+      - name: Terraform apply (atualiza as task definitions com a nova imagem)
+        working-directory: ${{ env.TF_DIR }}
+        env:
+          TF_VAR_backend_image_tag: ${{ github.sha }}
+          TF_VAR_worker_image_tag: ${{ github.sha }}
+          TF_VAR_frontend_image_tag: ${{ github.sha }}
+          # As demais variáveis (domain_name, oidc_*, bedrock_model_id etc.)
+          # vêm do terraform.tfvars já commitado — os únicos segredos de
+          # verdade ficam em GitHub Secrets, nunca no repositório:
+          TF_VAR_oidc_client_secret: ${{ secrets.OIDC_CLIENT_SECRET }}
+          TF_VAR_anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          TF_VAR_openai_api_key: ${{ secrets.OPENAI_API_KEY }}
+        run: terraform apply -auto-approve
+
+      - name: Rodar migrações do banco
+        working-directory: ${{ env.TF_DIR }}
+        run: |
+          TASK_DEF=$(terraform output -raw migrate_task_definition_arn)
+          CLUSTER=$(terraform output -raw ecs_cluster_name)
+          aws ecs run-task \
+            --cluster "$CLUSTER" \
+            --task-definition "$TASK_DEF" \
+            --launch-type FARGATE \
+            --network-configuration "$(terraform output -json migrate_network_configuration 2>/dev/null || echo '{}')"

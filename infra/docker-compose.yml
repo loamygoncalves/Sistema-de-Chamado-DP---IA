@@ -98,9 +98,11 @@ services:
     build:
       context: ../frontend
       dockerfile: Dockerfile
-    environment:
-      NEXT_PUBLIC_API_BASE_URL: http://localhost:8000/api/v1
-      NEXT_PUBLIC_APP_NAME: "BEEP AI Service Desk"
+      # NEXT_PUBLIC_* precisa ser build arg, não env de runtime — o Next.js
+      # embute esses valores no bundle do cliente durante `next build`.
+      args:
+        NEXT_PUBLIC_API_BASE_URL: http://localhost:8000/api/v1
+        NEXT_PUBLIC_APP_NAME: "BEEP AI Service Desk"
     depends_on:
       - backend
     ports:
