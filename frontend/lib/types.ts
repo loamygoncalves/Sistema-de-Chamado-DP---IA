@@ -127,6 +127,8 @@ export interface ChatMessageRead {
   content: string;
   confidence_score: number | null;
   sources: SourceRef[] | null;
+  /** Resposta ao "isso resolveu sua dúvida?"; `null` = ainda não respondeu. */
+  was_helpful: boolean | null;
   created_at: string;
 }
 

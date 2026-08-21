@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import DateTime, ForeignKey, Numeric, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Numeric, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -36,6 +36,11 @@ class ChatMessage(Base, UUIDPKMixin):
     resulted_ticket_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("tickets.id"), nullable=True
     )
+    # Resposta do colaborador ao "isso resolveu sua dúvida?" — perguntado após
+    # TODA resposta da IA. Nulo = ainda não respondeu. É o sinal mais direto de
+    # qualidade que existe: `false` marca exatamente quais respostas falharam,
+    # independente da confiança que a IA achava que tinha.
+    was_helpful: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default="now()")
 
     conversation = relationship("ChatConversation", back_populates="messages")

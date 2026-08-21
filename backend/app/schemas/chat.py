@@ -48,6 +48,13 @@ class MessageResponse(BaseModel):
     ticket: TicketRef | None = None
 
 
+class MessageFeedback(BaseModel):
+    """Resposta ao "isso resolveu sua dúvida?", perguntado após toda resposta
+    da IA. `false` é o que habilita a oferta de abrir chamado para o DP."""
+
+    was_helpful: bool
+
+
 class MessageRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -56,4 +63,5 @@ class MessageRead(BaseModel):
     content: str
     confidence_score: Decimal | None
     sources: list | None
+    was_helpful: bool | None
     created_at: datetime

@@ -163,6 +163,7 @@ aceita novas mensagens.
 | confidence_score | NUMERIC(5,2) NULLABLE | apenas para `assistant` |
 | sources | JSONB | lista de fontes citadas (artigo/doc/faq + trecho) |
 | resulted_ticket_id | UUID FK → tickets NULLABLE | quando a resposta gerou chamado |
+| was_helpful | BOOLEAN NULLABLE | resposta ao "isso resolveu sua dúvida?", perguntado após toda resposta da IA. **Sem default de propósito**: `NULL` = ainda não respondeu, que é informação diferente de `false` = respondeu que não ajudou. Um `false` é o gatilho para oferecer o chamado ao DP |
 | created_at | TIMESTAMPTZ | |
 
 ### `ai_settings`

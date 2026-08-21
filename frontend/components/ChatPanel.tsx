@@ -14,6 +14,10 @@ interface DisplayMessage {
   role: "user" | "assistant";
   content: string;
   response?: MessageResponse;
+  /** Resposta ao "isso resolveu sua dúvida?". `undefined` = ainda não respondeu. */
+  wasHelpful?: boolean;
+  /** Disse que não ajudou, mas recusou abrir chamado. */
+  declinedTicket?: boolean;
 }
 
 export default function ChatPanel() {
@@ -65,6 +69,27 @@ export default function ChatPanel() {
     } finally {
       setSending(false);
     }
+  }
+
+  /** Registra o "isso resolveu sua dúvida?" — perguntado após TODA resposta.
+   *  O `false` é o que faz a próxima pergunta (abrir chamado?) aparecer. */
+  async function rateAnswer(messageId: string, wasHelpful: boolean) {
+    setMessages((prev) =>
+      prev.map((m) => (m.response?.message_id === messageId ? { ...m, wasHelpful } : m)),
+    );
+    // O registro do feedback é o que dá o sinal de qualidade da base; se a
+    // chamada falhar, a conversa não deve travar por isso.
+    await api
+      .post(`/chat/conversations/${conversation?.id}/messages/${messageId}/feedback`, {
+        was_helpful: wasHelpful,
+      })
+      .catch(() => {});
+  }
+
+  function declineTicket(messageId: string) {
+    setMessages((prev) =>
+      prev.map((m) => (m.response?.message_id === messageId ? { ...m, declinedTicket: true } : m)),
+    );
   }
 
   async function openSuggestedTicket(messageId: string) {
@@ -133,17 +158,61 @@ export default function ChatPanel() {
                     ))}
                   </ul>
                 )}
-                {(message.response.decision === "suggest_ticket" || message.response.decision === "auto_ticket") &&
-                  !message.response.ticket && (
+                {/* Fluxo de duas etapas, igual para TODA resposta (inclusive
+                    as de alta confiança): primeiro "resolveu?", e só quem diz
+                    que não é que recebe a oferta de chamado. Isso mantém a
+                    abertura de chamado como consequência do colaborador dizer
+                    que não foi atendido, não do score de confiança da IA. */}
+                {!message.response.ticket && message.wasHelpful === undefined && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-xs text-slate-500">Isso resolveu sua dúvida?</span>
                     <button
-                      className="btn-secondary mt-1 text-xs"
+                      className="btn-secondary text-xs"
+                      onClick={() => rateAnswer(message.response!.message_id, true)}
+                    >
+                      Sim, resolveu
+                    </button>
+                    <button
+                      className="btn-secondary text-xs"
+                      onClick={() => rateAnswer(message.response!.message_id, false)}
+                    >
+                      Não, preciso de mais ajuda
+                    </button>
+                  </div>
+                )}
+
+                {message.wasHelpful === true && !message.response.ticket && (
+                  <p className="text-xs text-emerald-700">
+                    Que bom! Se precisar de mais alguma coisa, é só perguntar.
+                  </p>
+                )}
+
+                {message.wasHelpful === false && !message.response.ticket && !message.declinedTicket && (
+                  <div className="flex flex-wrap items-center gap-2 rounded-lg border border-accent-100 bg-accent-50 px-3 py-2">
+                    <span className="text-xs text-accent-700">
+                      Quer abrir um chamado para um analista do DP?
+                    </span>
+                    <button
+                      className="btn-primary text-xs"
                       onClick={() => openSuggestedTicket(message.response!.message_id)}
                     >
-                      {message.response.decision === "auto_ticket"
-                        ? "Não resolveu? Abrir chamado para o DP"
-                        : "Abrir chamado sobre esta dúvida"}
+                      Sim, abrir chamado
                     </button>
-                  )}
+                    <button
+                      className="btn-secondary text-xs"
+                      onClick={() => declineTicket(message.response!.message_id)}
+                    >
+                      Agora não
+                    </button>
+                  </div>
+                )}
+
+                {message.declinedTicket && !message.response.ticket && (
+                  <p className="text-xs text-slate-500">
+                    Tudo bem! Se mudar de ideia, me pergunte de novo e eu ofereço o chamado.
+                  </p>
+                )}
+
                 {message.response.ticket && (
                   <p className="text-xs text-emerald-700">
                     Chamado <span className="font-semibold">{message.response.ticket.ticket_number}</span> aberto

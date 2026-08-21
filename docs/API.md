@@ -20,7 +20,8 @@ login e troca de token no backend). Todas as respostas de erro seguem
 | GET | `/chat/conversations` | Lista conversas do usuário | employee+ |
 | GET | `/chat/conversations/{id}` | Histórico de mensagens | employee+ (dono) |
 | POST | `/chat/conversations/{id}/messages` | Envia pergunta; retorna resposta da IA, score e fontes. **Nunca abre chamado sozinho** — `ticket` vem sempre `null`. As últimas `CHAT_HISTORY_MAX_MESSAGES` mensagens da conversa são enviadas como memória ao LLM, para que perguntas de acompanhamento façam sentido. `409` se a conversa já estiver encerrada | employee+ |
-| POST | `/chat/conversations/{id}/messages/{message_id}/open-ticket` | Cria o chamado somente após confirmação explícita do colaborador (faixas `suggest_ticket` 60–85% e `auto_ticket` <60%) | employee+ (dono) |
+| POST | `/chat/conversations/{id}/messages/{message_id}/feedback` | Registra se a resposta ajudou (`{"was_helpful": true|false}`). A pergunta é feita depois de **toda** resposta, inclusive as de alta confiança. `400` se a mensagem não for da IA | employee+ (dono) |
+| POST | `/chat/conversations/{id}/messages/{message_id}/open-ticket` | Cria o chamado somente após confirmação explícita do colaborador | employee+ (dono) |
 | POST | `/chat/conversations/{id}/close` | Encerra a conversa — a IA "esquece" o histórico dela; uma nova conversa (`POST /chat/conversations`) não carrega nenhuma memória desta | employee+ (dono) |
 
 Resposta de `POST /messages`:
@@ -41,6 +42,21 @@ Resposta de `POST /messages`:
 si é sempre uma ação separada e explícita do colaborador via `open-ticket`,
 mesmo quando `decision` é `auto_ticket` (baixa confiança). Isso evita abrir um
 chamado a cada pergunta que a IA não consiga responder com segurança.
+
+### Sempre perguntar se a resposta ajudou
+
+Depois de **qualquer** resposta da IA — inclusive as de alta confiança — a UI
+pergunta "Isso resolveu sua dúvida?" e registra a escolha em
+`POST .../feedback`. Só quem responde `was_helpful=false` recebe a pergunta
+seguinte, "quer abrir um chamado para um analista do DP?", e só o `open-ticket`
+depois disso cria o chamado. Assim a abertura do chamado passa a ser
+consequência do colaborador dizer que não foi atendido, e não do score de
+confiança da IA — o `decision` continua servindo apenas para a UI escolher o
+texto que acompanha a resposta.
+
+O feedback é opcional: `was_helpful` fica `null` enquanto o colaborador não
+responde, porque "não respondeu" não é a mesma informação que "respondeu que
+não ajudou". O valor pode ser trocado (reenviar o `POST` sobrescreve).
 
 ## Tickets
 | Método | Rota | Descrição | Papéis |

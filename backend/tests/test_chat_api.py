@@ -184,3 +184,112 @@ async def test_closed_conversation_rejects_new_messages(employee_client: AsyncCl
     assert new_conv.status_code == 200
     assert new_conv.json()["status"] == "ativa"
     assert new_conv.json()["id"] != conversation_id
+
+
+async def _ask_one(client: AsyncClient, question: str, *, answer: str, confidence: float) -> dict:
+    """Faz uma pergunta com o RAG e o LLM mockados, devolvendo a resposta da API."""
+    with (
+        patch("app.services.chat_service.embedding_service.embed_one", new=AsyncMock(return_value=[0.1] * 8)),
+        patch(
+            "app.services.chat_service.vector_store.search",
+            new=AsyncMock(return_value=[_mock_hit("faq-1", "Banco de horas", "Compensadas em 6 meses.")]),
+        ),
+        patch("app.services.chat_service.get_llm_provider") as get_provider,
+    ):
+        provider = AsyncMock()
+        provider.generate.return_value = LLMResult(answer=answer, confidence=confidence, used_source_ids=["faq-1"])
+        get_provider.return_value = provider
+
+        conv = await client.post("/api/v1/chat/conversations", json={})
+        conversation_id = conv.json()["id"]
+        response = await client.post(
+            f"/api/v1/chat/conversations/{conversation_id}/messages", json={"content": question}
+        )
+        return {"conversation_id": conversation_id, **response.json()}
+
+
+async def test_high_confidence_answer_starts_without_feedback_and_accepts_it(employee_client: AsyncClient):
+    # Mesmo com 95% de confiança a pergunta "isso resolveu?" é feita — antes,
+    # respostas de alta confiança não pediam retorno nenhum.
+    asked = await _ask_one(
+        employee_client, "Como funciona meu banco de horas?", answer="Compensado em 6 meses.", confidence=0.95
+    )
+    assert asked["decision"] == "auto_answer"
+
+    messages = await employee_client.get(f"/api/v1/chat/conversations/{asked['conversation_id']}")
+    assistant = [m for m in messages.json() if m["role"] == "assistant"][0]
+    assert assistant["was_helpful"] is None  # ainda não respondeu
+
+    feedback = await employee_client.post(
+        f"/api/v1/chat/conversations/{asked['conversation_id']}/messages/{asked['message_id']}/feedback",
+        json={"was_helpful": True},
+    )
+    assert feedback.status_code == 200
+    assert feedback.json()["was_helpful"] is True
+
+
+async def test_negative_feedback_is_recorded_and_ticket_can_then_be_opened(
+    employee_client: AsyncClient, department
+):
+    asked = await _ask_one(
+        employee_client, "Como funciona meu banco de horas?", answer="Compensado em 6 meses.", confidence=0.95
+    )
+
+    negative = await employee_client.post(
+        f"/api/v1/chat/conversations/{asked['conversation_id']}/messages/{asked['message_id']}/feedback",
+        json={"was_helpful": False},
+    )
+    assert negative.status_code == 200
+    assert negative.json()["was_helpful"] is False
+
+    # Dizer que não ajudou é o que leva à oferta de chamado — mas o chamado
+    # em si continua só nascendo da confirmação explícita.
+    ticket = await employee_client.post(
+        f"/api/v1/chat/conversations/{asked['conversation_id']}/messages/{asked['message_id']}"
+        f"/open-ticket?department_id={department.id}"
+    )
+    assert ticket.status_code == 200
+    assert ticket.json()["ticket_number"].startswith("BEEP-")
+
+
+async def test_feedback_can_be_changed_and_is_persisted(employee_client: AsyncClient):
+    asked = await _ask_one(
+        employee_client, "Como solicitar férias?", answer="Solicite pelo gestor.", confidence=0.9
+    )
+    base = f"/api/v1/chat/conversations/{asked['conversation_id']}/messages/{asked['message_id']}/feedback"
+
+    await employee_client.post(base, json={"was_helpful": True})
+    changed = await employee_client.post(base, json={"was_helpful": False})
+    assert changed.json()["was_helpful"] is False
+
+    messages = await employee_client.get(f"/api/v1/chat/conversations/{asked['conversation_id']}")
+    assistant = [m for m in messages.json() if m["role"] == "assistant"][0]
+    assert assistant["was_helpful"] is False
+
+
+async def test_cannot_rate_the_users_own_question(employee_client: AsyncClient):
+    asked = await _ask_one(
+        employee_client, "Qual a política de home office?", answer="Híbrido, 2 dias.", confidence=0.9
+    )
+    messages = await employee_client.get(f"/api/v1/chat/conversations/{asked['conversation_id']}")
+    user_message = [m for m in messages.json() if m["role"] == "user"][0]
+
+    response = await employee_client.post(
+        f"/api/v1/chat/conversations/{asked['conversation_id']}/messages/{user_message['id']}/feedback",
+        json={"was_helpful": True},
+    )
+    assert response.status_code == 400
+
+
+async def test_feedback_on_someone_elses_conversation_is_rejected(
+    client_as, employee_user, analyst_user
+):
+    async with client_as(employee_user) as employee:
+        asked = await _ask_one(employee, "Dúvida qualquer", answer="Resposta.", confidence=0.9)
+
+    async with client_as(analyst_user) as outro:
+        response = await outro.post(
+            f"/api/v1/chat/conversations/{asked['conversation_id']}/messages/{asked['message_id']}/feedback",
+            json={"was_helpful": True},
+        )
+    assert response.status_code == 404

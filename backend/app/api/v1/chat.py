@@ -7,11 +7,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.deps import require_employee
 from app.db.session import get_db
 from app.models.chat import ChatConversation, ChatMessage
+from app.models.enums import ChatRole
 from app.models.user import User
 from app.schemas.chat import (
     ConversationCreate,
     ConversationRead,
     MessageCreate,
+    MessageFeedback,
     MessageRead,
     MessageResponse,
     SourceRef,
@@ -104,6 +106,35 @@ async def post_message(
     )
 
 
+async def _get_owned_message(db: AsyncSession, conversation_id: uuid.UUID, message_id: uuid.UUID) -> ChatMessage:
+    message = await db.get(ChatMessage, message_id)
+    if message is None or message.conversation_id != conversation_id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Mensagem não encontrada")
+    return message
+
+
+@router.post("/conversations/{conversation_id}/messages/{message_id}/feedback", response_model=MessageRead)
+async def rate_answer(
+    conversation_id: uuid.UUID,
+    message_id: uuid.UUID,
+    payload: MessageFeedback,
+    user: User = Depends(require_employee),
+    db: AsyncSession = Depends(get_db),
+):
+    """Registra se a resposta da IA ajudou. A pergunta é feita após TODA
+    resposta — inclusive as de alta confiança, que antes não pediam retorno
+    nenhum. Um `was_helpful=false` é o gatilho para oferecer o chamado ao DP."""
+    await _get_owned_conversation(db, conversation_id, user)
+    message = await _get_owned_message(db, conversation_id, message_id)
+    if message.role != ChatRole.ASSISTANT:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Só é possível avaliar respostas da IA")
+
+    message.was_helpful = payload.was_helpful
+    await db.commit()
+    await db.refresh(message)
+    return message
+
+
 @router.post("/conversations/{conversation_id}/messages/{message_id}/open-ticket", response_model=TicketRef)
 async def open_ticket(
     conversation_id: uuid.UUID,
@@ -113,9 +144,7 @@ async def open_ticket(
     db: AsyncSession = Depends(get_db),
 ):
     await _get_owned_conversation(db, conversation_id, user)
-    message = await db.get(ChatMessage, message_id)
-    if message is None or message.conversation_id != conversation_id:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Mensagem não encontrada")
+    message = await _get_owned_message(db, conversation_id, message_id)
     if message.resulted_ticket_id:
         raise HTTPException(status.HTTP_409_CONFLICT, "Esta mensagem já gerou um chamado")
 
