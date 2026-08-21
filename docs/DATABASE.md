@@ -82,9 +82,20 @@ SLA de 4h aberto numa sexta às 23h só vence na segunda-feira.
 | created_at / updated_at / closed_at | TIMESTAMPTZ | |
 
 ### `ticket_history`
-`id, ticket_id FK, actor_id FK users NULLABLE, action, comment, metadata JSONB, created_at`.
+`id, ticket_id FK, actor_id FK users NULLABLE, action, comment,
+is_internal BOOLEAN default false, metadata JSONB, created_at`.
 Ações: `criado`, `assumido`, `transferido`, `prioridade_alterada`, `comentario`,
-`status_alterado`, `resolvido`, `encerrado`.
+`nota_interna`, `status_alterado`, `resolvido`, `encerrado`.
+
+Esta tabela é ao mesmo tempo a trilha de auditoria e a **conversa** do chamado:
+`comentario`/`nota_interna` são falas (renderizadas como mensagens na tela de
+atendimento), o resto são eventos de fluxo (marcadores na timeline).
+
+`is_internal = true` marca nota interna do time de atendimento — usada pelo
+analista para registrar apuração ("conferir com a folha antes de responder")
+sem expor isso a quem abriu o chamado. `GET /tickets/{id}` filtra essas linhas
+quando quem consulta é o solicitante, e `POST /tickets/{id}/comments` ignora a
+flag se o autor não for analyst+.
 
 ### `ticket_attachments`
 `id, ticket_id FK, uploaded_by FK users, filename, content_type, storage_path, size_bytes, created_at`.

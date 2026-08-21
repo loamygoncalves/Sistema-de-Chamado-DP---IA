@@ -45,17 +45,28 @@ class TicketHistoryRead(BaseModel):
 
     id: uuid.UUID
     actor_id: uuid.UUID | None
+    actor_name: str | None = None
     action: str
     comment: str | None
+    is_internal: bool
     created_at: datetime
 
 
 class TicketDetail(TicketRead):
     history: list[TicketHistoryRead] = []
+    # Nomes resolvidos para a tela de atendimento — o analista precisa saber
+    # com quem está falando e quem é o responsável, não só os UUIDs.
+    requester_name: str | None = None
+    requester_email: str | None = None
+    assigned_to_name: str | None = None
+    department_name: str | None = None
 
 
 class TicketCommentCreate(BaseModel):
     comment: str
+    # Nota interna (só analistas+ veem). Ignorado quando quem comenta é o
+    # próprio solicitante — ver `POST /tickets/{id}/comments`.
+    is_internal: bool = False
 
 
 class TicketTransfer(BaseModel):

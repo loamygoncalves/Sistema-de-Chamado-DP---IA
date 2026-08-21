@@ -53,13 +53,20 @@ export interface Ticket {
 export interface TicketHistoryEntry {
   id: string;
   actor_id: string | null;
+  actor_name: string | null;
   action: string;
   comment: string | null;
+  /** Nota interna do time de atendimento — a API nunca envia estas ao solicitante. */
+  is_internal: boolean;
   created_at: string;
 }
 
 export interface TicketDetail extends Ticket {
   history: TicketHistoryEntry[];
+  requester_name: string | null;
+  requester_email: string | null;
+  assigned_to_name: string | null;
+  department_name: string | null;
 }
 
 export type ConversationStatus = "ativa" | "encerrada";

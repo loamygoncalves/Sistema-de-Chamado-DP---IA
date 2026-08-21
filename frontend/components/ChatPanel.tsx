@@ -113,7 +113,7 @@ export default function ChatPanel() {
             <div
               className={
                 message.role === "user"
-                  ? "inline-block max-w-[85%] rounded-2xl rounded-br-sm bg-brand-500 px-4 py-2 text-sm text-white"
+                  ? "inline-block max-w-[85%] rounded-2xl rounded-br-sm bg-brand-700 px-4 py-2 text-sm text-white"
                   : "inline-block max-w-[85%] rounded-2xl rounded-bl-sm bg-slate-100 px-4 py-2 text-sm text-slate-800"
               }
             >

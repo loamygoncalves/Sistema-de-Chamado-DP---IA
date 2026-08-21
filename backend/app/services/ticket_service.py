@@ -119,8 +119,18 @@ async def change_status(db: AsyncSession, ticket: Ticket, actor: User, status: T
     return ticket
 
 
-async def add_comment(db: AsyncSession, ticket: Ticket, actor: User, comment: str) -> TicketHistory:
-    history = TicketHistory(ticket_id=ticket.id, actor_id=actor.id, action="comentario", comment=comment)
+async def add_comment(
+    db: AsyncSession, ticket: Ticket, actor: User, comment: str, *, is_internal: bool = False
+) -> TicketHistory:
+    """`is_internal=True` marca uma nota interna do analista — ela nunca é
+    devolvida ao colaborador solicitante (ver filtro em `GET /tickets/{id}`)."""
+    history = TicketHistory(
+        ticket_id=ticket.id,
+        actor_id=actor.id,
+        action="nota_interna" if is_internal else "comentario",
+        comment=comment,
+        is_internal=is_internal,
+    )
     db.add(history)
     await db.flush()
     return history

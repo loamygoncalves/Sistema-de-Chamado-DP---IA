@@ -1,5 +1,5 @@
-import TicketDetailView from "@/components/TicketDetailView";
+import AnalystTicketWorkspace from "@/components/AnalystTicketWorkspace";
 
 export default function AnalystTicketPage({ params }: { params: { id: string } }) {
-  return <TicketDetailView ticketId={params.id} isAnalystView />;
+  return <AnalystTicketWorkspace ticketId={params.id} />;
 }

@@ -1,6 +1,7 @@
 import asyncio
 import os
 import uuid
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import AsyncIterator
 
@@ -131,3 +132,22 @@ async def analyst_client(db_session: AsyncSession, analyst_user: User) -> AsyncI
     async with _client_as(db_session, analyst_user) as client:
         yield client
     app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def client_as(db_session: AsyncSession):
+    """Client autenticado como o usuário informado, para testes multi-ator.
+
+    `app.dependency_overrides` é global no FastAPI: pedir `analyst_client` e
+    `employee_client` no mesmo teste faria os DOIS resolverem para o último
+    usuário sobrescrito, silenciosamente. Aqui cada `async with` reaponta o
+    override, então só há um ator ativo por vez — use um bloco por
+    perspectiva.
+    """
+
+    @asynccontextmanager
+    async def _make(user: User) -> AsyncIterator[AsyncClient]:
+        async with _client_as(db_session, user) as client:
+            yield client
+
+    return _make

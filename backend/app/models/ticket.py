@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, SmallInteger, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, SmallInteger, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -52,10 +52,15 @@ class TicketHistory(Base, UUIDPKMixin):
     actor_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     action: Mapped[str] = mapped_column(String(50))
     comment: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Nota interna: visível apenas para analistas+ — nunca é devolvida ao
+    # colaborador solicitante. Serve para o analista registrar apuração
+    # ("conferindo com a folha") sem expor isso a quem abriu o chamado.
+    is_internal: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     extra_data: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default="now()")
 
     ticket = relationship("Ticket", back_populates="history")
+    actor = relationship("User", foreign_keys=[actor_id], lazy="joined")
 
 
 class TicketAttachment(Base, UUIDPKMixin):

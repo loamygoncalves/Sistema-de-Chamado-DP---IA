@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import ROLE_RANK, require_analyst, require_employee
 from app.db.session import get_db
+from app.models.department import Department
 from app.models.enums import TicketStatus, UserRole
 from app.models.ticket import Ticket, TicketAttachment
 from app.models.user import User
@@ -13,6 +14,7 @@ from app.schemas.ticket import (
     TicketCommentCreate,
     TicketCreate,
     TicketDetail,
+    TicketHistoryRead,
     TicketPriorityUpdate,
     TicketRatingCreate,
     TicketRead,
@@ -33,10 +35,12 @@ async def _get_ticket_or_404(db: AsyncSession, ticket_id: uuid.UUID) -> Ticket:
     return ticket
 
 
+def _is_staff(user: User) -> bool:
+    return ROLE_RANK[user.role] >= ROLE_RANK[UserRole.ANALYST]
+
+
 def _assert_can_view(ticket: Ticket, user: User) -> None:
-    is_owner = ticket.requester_id == user.id
-    is_staff = ROLE_RANK[user.role] >= ROLE_RANK[UserRole.ANALYST]
-    if not (is_owner or is_staff):
+    if not (ticket.requester_id == user.id or _is_staff(user)):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Sem acesso a este chamado")
 
 
@@ -67,7 +71,7 @@ async def list_tickets(
     db: AsyncSession = Depends(get_db),
 ):
     query = select(Ticket)
-    is_staff = ROLE_RANK[user.role] >= ROLE_RANK[UserRole.ANALYST]
+    is_staff = _is_staff(user)
     if mine or not is_staff:
         query = query.where(Ticket.requester_id == user.id)
     if status_filter:
@@ -84,7 +88,35 @@ async def get_ticket(ticket_id: uuid.UUID, user: User = Depends(require_employee
     ticket = await _get_ticket_or_404(db, ticket_id)
     _assert_can_view(ticket, user)
     await db.refresh(ticket, attribute_names=["history"])
-    return ticket
+
+    history = sorted(ticket.history, key=lambda h: h.created_at)
+    if not _is_staff(user):
+        # O solicitante nunca vê as notas internas do time de atendimento.
+        history = [h for h in history if not h.is_internal]
+
+    requester = await db.get(User, ticket.requester_id)
+    assignee = await db.get(User, ticket.assigned_to) if ticket.assigned_to else None
+    department = await db.get(Department, ticket.department_id)
+
+    return TicketDetail(
+        **{column: getattr(ticket, column) for column in TicketRead.model_fields},
+        history=[
+            TicketHistoryRead(
+                id=h.id,
+                actor_id=h.actor_id,
+                actor_name=h.actor.name if h.actor else None,
+                action=h.action,
+                comment=h.comment,
+                is_internal=h.is_internal,
+                created_at=h.created_at,
+            )
+            for h in history
+        ],
+        requester_name=requester.name if requester else None,
+        requester_email=requester.email if requester else None,
+        assigned_to_name=assignee.name if assignee else None,
+        department_name=department.name if department else None,
+    )
 
 
 @router.post("/{ticket_id}/comments")
@@ -93,9 +125,12 @@ async def add_comment(
 ):
     ticket = await _get_ticket_or_404(db, ticket_id)
     _assert_can_view(ticket, user)
-    history = await ticket_service.add_comment(db, ticket, user, payload.comment)
+    # Só analistas+ podem registrar nota interna — se o solicitante mandar a
+    # flag, ela é ignorada em vez de criar uma nota que ele mesmo não veria.
+    is_internal = payload.is_internal and _is_staff(user)
+    history = await ticket_service.add_comment(db, ticket, user, payload.comment, is_internal=is_internal)
     await db.commit()
-    return {"id": history.id}
+    return {"id": history.id, "is_internal": history.is_internal}
 
 
 @router.post("/{ticket_id}/attachments")
