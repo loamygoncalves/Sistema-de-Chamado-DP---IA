@@ -103,8 +103,9 @@ async def test_analyst_can_transfer_ticket_to_another_analyst(analyst_client: As
     assert response.status_code == 200
     data = response.json()
     assert data["assigned_to"] == str(other_analyst.id)
-    # Transferir devolve o chamado para triagem — quem recebeu ainda não assumiu.
-    assert data["status"] == "em_triagem"
+    # Transferir para um analista específico já marca "em atendimento" —
+    # status segue automaticamente quem ficou responsável pelo chamado.
+    assert data["status"] == "em_atendimento"
 
     detail = await analyst_client.get(f"/api/v1/tickets/{ticket['id']}")
     transfer_entry = [h for h in detail.json()["history"] if h["action"] == "transferido"][0]
@@ -243,3 +244,93 @@ async def test_open_ticket_uses_edited_draft_subject_and_description(employee_cl
     assert body["description"] == "Resumo editado pelo colaborador antes de confirmar."
     assert body["category"] == "Vale Refeição"
     assert body["subcategory"] == "Valor divergente"
+
+
+# ---------- status automático (em_triagem -> em_atendimento -> em_triagem) ----------
+
+
+async def test_ticket_starts_in_triagem_and_transfer_without_analyst_returns_to_triagem(
+    analyst_client: AsyncClient, department
+):
+    ticket = await _open_ticket(analyst_client, department)
+    assert ticket["status"] == "em_triagem"
+
+    await analyst_client.post(f"/api/v1/tickets/{ticket['id']}/assume")
+    detail = await analyst_client.get(f"/api/v1/tickets/{ticket['id']}")
+    assert detail.json()["status"] == "em_atendimento"
+
+    # Transferir removendo o responsável (assigned_to null) devolve à
+    # caixa de entrada — "em_triagem" de novo, não fica "em atendimento" sem
+    # ninguém atendendo.
+    back_to_inbox = await analyst_client.post(f"/api/v1/tickets/{ticket['id']}/transfer", json={"assigned_to": None})
+    assert back_to_inbox.json()["status"] == "em_triagem"
+    assert back_to_inbox.json()["assigned_to"] is None
+
+
+# ---------- caixa de entrada geral (filtros unassigned/overdue/pending_analyst) ----------
+
+
+async def test_unassigned_filter_is_the_general_inbox(analyst_client: AsyncClient, department):
+    unassigned_ticket = await _open_ticket(analyst_client, department, "Chamado sem analista")
+    assigned_ticket = await _open_ticket(analyst_client, department, "Chamado já atribuído")
+    await analyst_client.post(f"/api/v1/tickets/{assigned_ticket['id']}/assume")
+
+    response = await analyst_client.get("/api/v1/tickets?unassigned=true")
+    numbers = [t["ticket_number"] for t in response.json()]
+    assert unassigned_ticket["ticket_number"] in numbers
+    assert assigned_ticket["ticket_number"] not in numbers
+
+
+async def test_pending_analyst_filter_excludes_awaiting_user_and_closed(analyst_client: AsyncClient, department):
+    pending = await _open_ticket(analyst_client, department, "Aguardando um analista pegar")
+    await analyst_client.post(f"/api/v1/tickets/{pending['id']}/assume")
+
+    awaiting_user = await _open_ticket(analyst_client, department, "Já respondido, aguardando colaborador")
+    await analyst_client.post(f"/api/v1/tickets/{awaiting_user['id']}/assume")
+    await analyst_client.post(
+        f"/api/v1/tickets/{awaiting_user['id']}/comments",
+        json={"comment": "Já verifiquei, segue a resposta.", "new_status": "aguardando_usuario"},
+    )
+
+    response = await analyst_client.get("/api/v1/tickets?pending_analyst=true")
+    numbers = [t["ticket_number"] for t in response.json()]
+    assert pending["ticket_number"] in numbers
+    assert awaiting_user["ticket_number"] not in numbers
+
+
+# ---------- respostas padrão ----------
+
+
+async def test_analyst_can_create_list_and_delete_canned_response(analyst_client: AsyncClient, department):
+    create = await analyst_client.post(
+        "/api/v1/tickets/canned-responses",
+        json={"title": "Migração do login ADP", "content": "Exclua o link antigo e acesse pelo link oficial...", "department_id": None},
+    )
+    assert create.status_code == 200
+    response_id = create.json()["id"]
+
+    listed = await analyst_client.get("/api/v1/tickets/canned-responses")
+    assert any(r["id"] == response_id for r in listed.json())
+
+    scoped = await analyst_client.post(
+        "/api/v1/tickets/canned-responses",
+        json={"title": "Regra de VT", "content": "O corte de VT é sempre dia 15...", "department_id": str(department.id)},
+    )
+    assert scoped.status_code == 200
+
+    filtered = await analyst_client.get(f"/api/v1/tickets/canned-responses?department_id={department.id}")
+    filtered_ids = {r["id"] for r in filtered.json()}
+    assert response_id in filtered_ids  # genérica (sem fila) aparece pra qualquer fila
+    assert scoped.json()["id"] in filtered_ids
+
+    deleted = await analyst_client.delete(f"/api/v1/tickets/canned-responses/{response_id}")
+    assert deleted.status_code == 204
+    listed_after = await analyst_client.get("/api/v1/tickets/canned-responses")
+    assert not any(r["id"] == response_id for r in listed_after.json())
+
+
+async def test_employee_cannot_manage_canned_responses(employee_client: AsyncClient):
+    response = await employee_client.post(
+        "/api/v1/tickets/canned-responses", json={"title": "X", "content": "Y", "department_id": None}
+    )
+    assert response.status_code == 403

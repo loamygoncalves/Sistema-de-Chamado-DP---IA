@@ -96,6 +96,15 @@ export interface TicketDetail extends Ticket {
   department_name: string | null;
 }
 
+export interface CannedResponse {
+  id: string;
+  title: string;
+  content: string;
+  department_id: string | null;
+  created_by: string;
+  created_at: string;
+}
+
 export type ConversationStatus = "ativa" | "encerrada";
 
 export interface Conversation {

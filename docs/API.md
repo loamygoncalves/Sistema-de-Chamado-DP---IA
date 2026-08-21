@@ -62,18 +62,24 @@ não ajudou". O valor pode ser trocado (reenviar o `POST` sobrescreve).
 ## Tickets
 | Método | Rota | Descrição | Papéis |
 |---|---|---|---|
-| POST | `/tickets` | Abre chamado manualmente. Dispara notificação por e-mail ao solicitante (evento `aberto`) | employee+ |
-| GET | `/tickets` | Lista com filtros (`status`, `department_id`, `assigned_to`, `mine`, `q`). `q` busca por protocolo, matrícula, assunto ou nome do solicitante (usado pela aba de busca e por "meus atendimentos", que passa `assigned_to=<id do analista logado>`) | employee+ (escopo próprio) / analyst+ (fila) |
+| POST | `/tickets` | Abre chamado manualmente. Nasce em `em_triagem` (caixa de entrada geral, sem analista). Dispara notificação por e-mail ao solicitante (evento `aberto`) | employee+ |
+| GET | `/tickets` | Lista com filtros (`status`, `department_id`, `assigned_to`, `mine`, `q`, `unassigned`, `overdue`, `pending_analyst`). `q` busca por protocolo, matrícula, assunto ou nome do solicitante (usado pela aba de busca e por "meus atendimentos", que passa `assigned_to=<id do analista logado>`). `unassigned=true` é a **caixa de entrada geral** (`assigned_to IS NULL` — tela principal do analista); `overdue=true` filtra `sla_due_at` vencido e ainda não resolvido/encerrado; `pending_analyst=true` filtra chamados em `em_triagem`/`em_atendimento` (ainda não estão com `aguardando_usuário`, `resolvido` ou `encerrado`) | employee+ (escopo próprio) / analyst+ (fila) |
 | GET | `/tickets/{id}` | Detalhe + histórico + anexos, com nomes já resolvidos (`requester_name`, `requester_email`, `assigned_to_name`, `department_name`, e `actor_name` em cada evento). **Notas internas são omitidas quando quem consulta é o solicitante** | dono ou analyst+ |
 | POST | `/tickets/{id}/comments` | Adiciona mensagem à conversa. `{"comment": "...", "is_internal": false, "new_status": "aguardando_usuario"}` — `is_internal: true` grava **nota interna** (visível só a analyst+; a flag é ignorada se quem comenta é o solicitante); `new_status` muda o status na mesma ação (só analyst+, e **não** aceita `encerrado`). Resposta pública de analyst+ dispara notificação por e-mail ao solicitante (evento `respondido`) | dono ou analyst+ |
 | POST | `/tickets/{id}/attachments` | Upload de anexo — persistido de verdade em armazenamento S3-compatível (MinIO local / S3 em produção, mesmas credenciais `S3_*`), não só os metadados | dono ou analyst+ |
-| POST | `/tickets/{id}/assume` | Analista assume o chamado | analyst+ |
-| POST | `/tickets/{id}/transfer` | Transfere para outro analista/fila | analyst+ |
+| POST | `/tickets/{id}/assume` | Analista assume o chamado. Muda o status automaticamente para `em_atendimento` | analyst+ |
+| POST | `/tickets/{id}/transfer` | Transfere para outro analista/fila. Status segue quem ficou responsável: com `assigned_to` definido vira `em_atendimento`; sem `assigned_to` (voltou pra caixa de entrada geral) volta a `em_triagem` | analyst+ |
 | PATCH | `/tickets/{id}/priority` | Altera prioridade (recalcula SLA) | analyst+ |
 | PATCH | `/tickets/{id}/status` | Altera status. **Não encerra**: `encerrado` retorna `400` — encerrar exige motivo e passa por `/close` | analyst+ |
 | GET | `/tickets/closure-reasons` | Motivos de encerramento que **este** usuário pode usar, com a mensagem padrão de cada um (o texto mora no backend, para não haver duas cópias) | employee+ |
 | POST | `/tickets/{id}/close` | Encerra o chamado. `{"reason": "...", "message": "..."}` — **`reason` é obrigatório** (`422` sem ele). `message` vazia usa a mensagem padrão do motivo. `409` se já estiver encerrado; `403` se o motivo não for permitido ao perfil. Dispara notificação por e-mail ao solicitante (evento `finalizado`). O aprendizado contínuo só dispara para `reason=resolvido` | dono (motivos do colaborador) ou analyst+ (motivos do DP) |
 | POST | `/tickets/{id}/rating` | Colaborador avalia atendimento (1-5) | dono |
+| GET | `/tickets/canned-responses` | Lista respostas padrão. Sem `department_id`, devolve todas; com `department_id`, devolve as genéricas (sem fila) + as da fila | analyst+ |
+| POST | `/tickets/canned-responses` | Cria resposta padrão. `{"title": "...", "content": "...", "department_id": null}` — `department_id` nulo torna a resposta genérica (disponível em qualquer fila) | analyst+ |
+| DELETE | `/tickets/canned-responses/{id}` | Remove resposta padrão | analyst+ |
+
+### Ciclo de status automático
+O status do chamado segue o responsável, sem ação manual do analista: `em_triagem` (recém-aberto, na caixa de entrada geral) → `em_atendimento` (assim que alguém assume ou é atribuído via transferência) → `em_triagem` de novo se a transferência remover o responsável (`assigned_to=null`, volta pra caixa de entrada). As transições para `aguardando_usuario`/`encerrado` continuam manuais (via `/comments` com `new_status`, `/status` ou `/close`).
 
 ## Base de conhecimento
 | Método | Rota | Descrição | Papéis |

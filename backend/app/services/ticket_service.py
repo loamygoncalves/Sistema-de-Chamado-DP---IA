@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.department import Department
 from app.models.enums import TicketClosureReason, TicketPriority, TicketSource, TicketStatus
-from app.models.ticket import Ticket, TicketHistory
+from app.models.ticket import CannedResponse, Ticket, TicketHistory
 from app.models.user import User
 from app.services.ai_settings_service import get_ai_settings
 from app.services.business_time import add_business_hours
@@ -103,7 +103,10 @@ async def create_ticket(
         subject=subject,
         description=description,
         priority=priority,
-        status=TicketStatus.NOVO,
+        # Nasce direto em "em triagem" — sem analista atribuído ainda, na
+        # caixa de entrada geral. Vira "em atendimento" sozinho assim que
+        # alguém assume ou recebe o chamado (ver assume_ticket/transfer_ticket).
+        status=TicketStatus.EM_TRIAGEM,
         source=source,
         origin_conversation_id=origin_conversation_id,
         sla_due_at=await _compute_sla_due_at(db, department, priority),
@@ -131,7 +134,10 @@ async def transfer_ticket(
         ticket.department_id = department_id
         ticket.sla_due_at = await _compute_sla_due_at(db, await db.get(Department, department_id), ticket.priority)
     ticket.assigned_to = assigned_to
-    ticket.status = TicketStatus.EM_TRIAGEM
+    # Status segue quem ficou responsável: com um analista definido, o
+    # chamado está sendo atendido; sem ninguém (voltou pra caixa de entrada),
+    # volta para triagem — mesma regra automática da atribuição inicial.
+    ticket.status = TicketStatus.EM_ATENDIMENTO if assigned_to else TicketStatus.EM_TRIAGEM
     db.add(TicketHistory(ticket_id=ticket.id, actor_id=actor.id, action="transferido", comment=reason))
     await db.flush()
     return ticket
@@ -214,3 +220,25 @@ async def add_comment(
     db.add(history)
     await db.flush()
     return history
+
+
+async def list_canned_responses(db: AsyncSession, *, department_id: uuid.UUID | None = None) -> list[CannedResponse]:
+    """Respostas padrão visíveis para quem atende a fila `department_id`:
+    as genéricas (sem fila) + as específicas dessa fila. Sem `department_id`,
+    devolve todas (uso administrativo)."""
+    query = select(CannedResponse).order_by(CannedResponse.title)
+    if department_id:
+        query = query.where(
+            (CannedResponse.department_id.is_(None)) | (CannedResponse.department_id == department_id)
+        )
+    result = await db.execute(query)
+    return list(result.scalars().all())
+
+
+async def create_canned_response(
+    db: AsyncSession, *, title: str, content: str, department_id: uuid.UUID | None, created_by: uuid.UUID
+) -> CannedResponse:
+    response = CannedResponse(title=title, content=content, department_id=department_id, created_by=created_by)
+    db.add(response)
+    await db.flush()
+    return response

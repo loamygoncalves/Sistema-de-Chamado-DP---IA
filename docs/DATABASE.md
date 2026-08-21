@@ -113,6 +113,15 @@ flag se o autor não for analyst+.
 ### `ticket_ratings`
 `id, ticket_id FK UNIQUE, score SMALLINT (1-5), comment, created_at`.
 
+### `canned_responses`
+`id, title VARCHAR(150), content TEXT, department_id FK departments NULLABLE,
+created_by FK users, created_at, updated_at`.
+
+Respostas prontas que o analista insere com um clique ao responder um chamado
+recorrente (ex.: migração do login do ADP), em vez de redigitar a mesma
+explicação toda vez. `department_id` nulo = genérica (disponível em qualquer
+fila); preenchido = só aparece para quem atende aquela fila.
+
 ### `knowledge_articles`
 | Campo | Tipo | Descrição |
 |---|---|---|

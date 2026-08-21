@@ -1,7 +1,7 @@
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, status
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import ROLE_RANK, require_analyst, require_employee
@@ -17,6 +17,8 @@ from app.models.enums import (
 from app.models.ticket import Ticket, TicketAttachment
 from app.models.user import User
 from app.schemas.ticket import (
+    CannedResponseCreate,
+    CannedResponseRead,
     ClosureReasonOption,
     TicketAttachmentRead,
     TicketClose,
@@ -77,6 +79,11 @@ async def list_tickets(
     status_filter: TicketStatus | None = Query(None, alias="status"),
     department_id: uuid.UUID | None = None,
     assigned_to: uuid.UUID | None = None,
+    unassigned: bool = Query(False, description="Só chamados sem analista atribuído — a caixa de entrada geral"),
+    overdue: bool = Query(False, description="Só chamados com SLA vencido, ainda não resolvidos/encerrados"),
+    pending_analyst: bool = Query(
+        False, description="Só chamados aguardando alguma interação do analista (fora de aguardando_usuario/resolvido/encerrado)"
+    ),
     q: str | None = Query(None, description="Busca por protocolo, matrícula, assunto ou nome do solicitante"),
     mine: bool = False,
     user: User = Depends(require_employee),
@@ -92,6 +99,15 @@ async def list_tickets(
         query = query.where(Ticket.department_id == department_id)
     if assigned_to:
         query = query.where(Ticket.assigned_to == assigned_to)
+    if unassigned:
+        query = query.where(Ticket.assigned_to.is_(None))
+    if overdue:
+        query = query.where(
+            Ticket.sla_due_at < func.now(),
+            Ticket.status.notin_([TicketStatus.RESOLVIDO, TicketStatus.ENCERRADO]),
+        )
+    if pending_analyst:
+        query = query.where(Ticket.status.in_([TicketStatus.EM_TRIAGEM, TicketStatus.EM_ATENDIMENTO]))
     if q:
         pattern = f"%{q}%"
         query = query.outerjoin(User, Ticket.requester_id == User.id).where(
@@ -124,6 +140,42 @@ async def closure_reasons(user: User = Depends(require_employee)):
         for reason in TicketClosureReason
         if reason in allowed
     ]
+
+
+# Também declaradas ANTES de `/{ticket_id}` pelo mesmo motivo acima.
+@router.get("/canned-responses", response_model=list[CannedResponseRead])
+async def list_canned_responses(
+    department_id: uuid.UUID | None = None, analyst: User = Depends(require_analyst), db: AsyncSession = Depends(get_db)
+):
+    """Respostas padrão disponíveis para inserir na resposta ao colaborador.
+    Passe `department_id` (a fila do chamado sendo atendido) para ver as
+    genéricas + as específicas dessa fila."""
+    return await ticket_service.list_canned_responses(db, department_id=department_id)
+
+
+@router.post("/canned-responses", response_model=CannedResponseRead)
+async def create_canned_response(
+    payload: CannedResponseCreate, analyst: User = Depends(require_analyst), db: AsyncSession = Depends(get_db)
+):
+    response = await ticket_service.create_canned_response(
+        db, title=payload.title, content=payload.content, department_id=payload.department_id, created_by=analyst.id
+    )
+    await db.commit()
+    await db.refresh(response)
+    return response
+
+
+@router.delete("/canned-responses/{response_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_canned_response(
+    response_id: uuid.UUID, analyst: User = Depends(require_analyst), db: AsyncSession = Depends(get_db)
+):
+    from app.models.ticket import CannedResponse
+
+    response = await db.get(CannedResponse, response_id)
+    if response is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Resposta padrão não encontrada")
+    await db.delete(response)
+    await db.commit()
 
 
 @router.get("/{ticket_id}", response_model=TicketDetail)

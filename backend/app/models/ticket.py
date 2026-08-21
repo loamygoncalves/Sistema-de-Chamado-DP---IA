@@ -91,3 +91,20 @@ class TicketRating(Base, UUIDPKMixin):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default="now()")
 
     ticket = relationship("Ticket", back_populates="rating")
+
+
+class CannedResponse(Base, UUIDPKMixin, TimestampMixin):
+    """Resposta padrão que o analista pode inserir com um clique ao responder
+    um chamado — para assuntos recorrentes (ex.: migração do login do ADP)
+    em vez de redigitar a mesma explicação toda vez."""
+
+    __tablename__ = "canned_responses"
+
+    title: Mapped[str] = mapped_column(String(150))
+    content: Mapped[str] = mapped_column(Text)
+    # Nula = disponível para qualquer fila; preenchida = só aparece pra quem
+    # está atendendo chamados dessa fila.
+    department_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("departments.id"), nullable=True
+    )
+    created_by: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))

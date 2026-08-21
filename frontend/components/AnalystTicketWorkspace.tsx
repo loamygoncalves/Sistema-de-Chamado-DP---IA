@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import clsx from "clsx";
 import { api } from "@/lib/api";
 import type {
+  CannedResponse,
   Department,
   TicketClosureReason,
   TicketDetail,
@@ -62,15 +63,44 @@ export default function AnalystTicketWorkspace({ ticketId }: { ticketId: string 
   const [error, setError] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
+  // Transferência: um painel único, com confirmação explícita — trocar
+  // analista/fila era um select que disparava na hora, fácil de acionar sem
+  // querer. Agora escolhe-se tudo e só transfere ao clicar no botão.
+  const [transferAnalyst, setTransferAnalyst] = useState("");
+  const [transferDepartment, setTransferDepartment] = useState("");
+  const [transferReason, setTransferReason] = useState("");
+
+  const [cannedResponses, setCannedResponses] = useState<CannedResponse[]>([]);
+  const [showCannedManager, setShowCannedManager] = useState(false);
+  const [newCannedTitle, setNewCannedTitle] = useState("");
+  const [newCannedContent, setNewCannedContent] = useState("");
+  const [newCannedGeneric, setNewCannedGeneric] = useState(false);
+
   const reload = useCallback(async () => {
     setTicket(await api.get<TicketDetail>(`/tickets/${ticketId}`));
   }, [ticketId]);
+
+  const reloadCannedResponses = useCallback(async (departmentId: string) => {
+    setCannedResponses(await api.get<CannedResponse[]>(`/tickets/canned-responses?department_id=${departmentId}`));
+  }, []);
 
   useEffect(() => {
     reload().catch((e) => setError((e as Error).message));
     api.get<Department[]>("/departments").then(setDepartments).catch(() => {});
     api.get<User[]>("/users/analysts").then(setAnalysts).catch(() => {});
   }, [reload]);
+
+  useEffect(() => {
+    if (ticket?.department_id) reloadCannedResponses(ticket.department_id).catch(() => {});
+  }, [ticket?.department_id, reloadCannedResponses]);
+
+  useEffect(() => {
+    // Painel de transferência começa sempre refletindo o estado atual do
+    // chamado, para o analista ver de onde está partindo.
+    setTransferAnalyst(ticket?.assigned_to ?? "");
+    setTransferDepartment(ticket?.department_id ?? "");
+    setTransferReason("");
+  }, [ticket?.id, ticket?.assigned_to, ticket?.department_id]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -103,6 +133,45 @@ export default function AnalystTicketWorkspace({ ticketId }: { ticketId: string 
       });
       setDraft("");
     });
+  }
+
+  function insertCannedResponse(response: CannedResponse) {
+    setDraft((prev) => (prev.trim() ? `${prev}\n\n${response.content}` : response.content));
+  }
+
+  async function createCannedResponse() {
+    const title = newCannedTitle.trim();
+    const content = newCannedContent.trim();
+    if (!title || !content || !ticket) return;
+    await run(async () => {
+      await api.post("/tickets/canned-responses", {
+        title,
+        content,
+        department_id: newCannedGeneric ? null : ticket.department_id,
+      });
+      setNewCannedTitle("");
+      setNewCannedContent("");
+      setNewCannedGeneric(false);
+      await reloadCannedResponses(ticket.department_id);
+    });
+  }
+
+  async function deleteCannedResponse(id: string) {
+    if (!ticket) return;
+    await run(async () => {
+      await api.delete(`/tickets/canned-responses/${id}`);
+      await reloadCannedResponses(ticket.department_id);
+    });
+  }
+
+  async function transferTicket() {
+    await run(() =>
+      api.post(`/tickets/${ticketId}/transfer`, {
+        assigned_to: transferAnalyst || null,
+        department_id: transferDepartment || null,
+        reason: transferReason.trim() || null,
+      }),
+    );
   }
 
   if (error && !ticket) return <p className="text-sm text-red-600">Erro ao carregar o chamado: {error}</p>;
@@ -178,6 +247,94 @@ export default function AnalystTicketWorkspace({ ticketId }: { ticketId: string 
                 : `${ticket.requester_name ?? "O colaborador"} vai ver esta mensagem no chamado.`}
             </p>
           </div>
+
+          {!isInternal && (
+            <div className="mb-2 flex flex-wrap items-center gap-2">
+              <select
+                value=""
+                disabled={busy}
+                onChange={(e) => {
+                  const response = cannedResponses.find((r) => r.id === e.target.value);
+                  if (response) insertCannedResponse(response);
+                }}
+                className="rounded-lg border border-slate-300 px-2 py-1.5 text-xs text-slate-900"
+              >
+                <option value="" disabled>
+                  Inserir resposta padrão...
+                </option>
+                {cannedResponses.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.title}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={() => setShowCannedManager((v) => !v)}
+                className="text-xs font-medium text-brand-700 hover:underline"
+              >
+                {showCannedManager ? "Fechar gerenciador" : "Gerenciar respostas padrão"}
+              </button>
+            </div>
+          )}
+
+          {!isInternal && showCannedManager && (
+            <div className="mb-3 space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
+              {cannedResponses.length > 0 && (
+                <ul className="space-y-1">
+                  {cannedResponses.map((r) => (
+                    <li key={r.id} className="flex items-center justify-between gap-2 text-xs">
+                      <span className="truncate" title={r.content}>
+                        {r.title}
+                        {r.department_id === null && (
+                          <span className="ml-1 text-slate-400">(todas as filas)</span>
+                        )}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => deleteCannedResponse(r.id)}
+                        disabled={busy}
+                        className="shrink-0 text-red-600 hover:underline"
+                      >
+                        Remover
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <input
+                value={newCannedTitle}
+                onChange={(e) => setNewCannedTitle(e.target.value)}
+                placeholder="Título (ex.: Migração do login do ADP)"
+                className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-xs"
+              />
+              <textarea
+                value={newCannedContent}
+                onChange={(e) => setNewCannedContent(e.target.value)}
+                placeholder="Texto da resposta padrão..."
+                rows={2}
+                className="w-full resize-y rounded-lg border border-slate-300 px-2 py-1.5 text-xs"
+              />
+              <div className="flex items-center justify-between gap-2">
+                <label className="flex items-center gap-1.5 text-xs text-slate-500">
+                  <input
+                    type="checkbox"
+                    checked={newCannedGeneric}
+                    onChange={(e) => setNewCannedGeneric(e.target.checked)}
+                  />
+                  Disponível em todas as filas
+                </label>
+                <button
+                  type="button"
+                  onClick={createCannedResponse}
+                  disabled={busy || !newCannedTitle.trim() || !newCannedContent.trim()}
+                  className="btn-secondary px-3 py-1 text-xs disabled:opacity-50"
+                >
+                  Salvar resposta padrão
+                </button>
+              </div>
+            </div>
+          )}
 
           <textarea
             value={draft}
@@ -267,27 +424,9 @@ export default function AnalystTicketWorkspace({ ticketId }: { ticketId: string 
         <div className="card space-y-3">
           <h2 className="text-sm font-semibold">Atendimento</h2>
 
-          <label className="block text-xs text-slate-500">
-            Analista responsável
-            <select
-              value={ticket.assigned_to ?? ""}
-              disabled={busy}
-              onChange={(e) =>
-                e.target.value &&
-                run(() => api.post(`/tickets/${ticketId}/transfer`, { assigned_to: e.target.value }))
-              }
-              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900"
-            >
-              <option value="" disabled>
-                Ninguém atribuído
-              </option>
-              {analysts.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name}
-                </option>
-              ))}
-            </select>
-          </label>
+          <p className="text-xs text-slate-500">
+            Responsável atual: <span className="font-medium text-slate-700">{ticket.assigned_to_name ?? "ninguém — na caixa de entrada geral"}</span>
+          </p>
 
           <button
             className="btn-secondary w-full text-sm"
@@ -336,20 +475,39 @@ export default function AnalystTicketWorkspace({ ticketId }: { ticketId: string 
             </select>
           </label>
 
+        </div>
+
+        {/* ---------------- Transferência ----------------
+            Painel único para trocar analista e/ou fila, com motivo e
+            confirmação explícita — nada muda até clicar em "Transferir". */}
+        <div className="card space-y-3">
+          <h2 className="text-sm font-semibold">Transferir chamado</h2>
+
           <label className="block text-xs text-slate-500">
-            Transferir de fila
+            Novo analista responsável
             <select
-              value=""
+              value={transferAnalyst}
               disabled={busy}
-              onChange={(e) =>
-                e.target.value &&
-                run(() => api.post(`/tickets/${ticketId}/transfer`, { department_id: e.target.value }))
-              }
+              onChange={(e) => setTransferAnalyst(e.target.value)}
               className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900"
             >
-              <option value="" disabled>
-                Escolher outra fila...
-              </option>
+              <option value="">Caixa de entrada geral (sem analista)</option>
+              {analysts.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="block text-xs text-slate-500">
+            Fila
+            <select
+              value={transferDepartment}
+              disabled={busy}
+              onChange={(e) => setTransferDepartment(e.target.value)}
+              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900"
+            >
               {departments.map((d) => (
                 <option key={d.id} value={d.id}>
                   {d.name}
@@ -358,6 +516,27 @@ export default function AnalystTicketWorkspace({ ticketId }: { ticketId: string 
             </select>
           </label>
 
+          <label className="block text-xs text-slate-500">
+            Motivo da transferência <span className="text-slate-400">(opcional)</span>
+            <input
+              value={transferReason}
+              onChange={(e) => setTransferReason(e.target.value)}
+              disabled={busy}
+              placeholder="Ex.: assunto é da fila de ponto, não de folha"
+              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900"
+            />
+          </label>
+
+          <button
+            className="btn-primary w-full text-sm"
+            disabled={
+              busy ||
+              (transferAnalyst === (ticket.assigned_to ?? "") && transferDepartment === ticket.department_id)
+            }
+            onClick={transferTicket}
+          >
+            Transferir
+          </button>
         </div>
 
         <div className="card space-y-3">

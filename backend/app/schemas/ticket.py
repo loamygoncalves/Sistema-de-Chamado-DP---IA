@@ -119,3 +119,20 @@ class ClosureReasonOption(BaseModel):
 class TicketRatingCreate(BaseModel):
     score: int
     comment: str | None = None
+
+
+class CannedResponseCreate(BaseModel):
+    title: str = Field(max_length=150)
+    content: str
+    department_id: uuid.UUID | None = None
+
+
+class CannedResponseRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    title: str
+    content: str
+    department_id: uuid.UUID | None
+    created_by: uuid.UUID
+    created_at: datetime

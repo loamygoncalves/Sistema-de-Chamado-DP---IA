@@ -73,7 +73,9 @@ async def test_employee_can_open_and_view_own_ticket(employee_client: AsyncClien
     assert response.status_code == 200
     ticket = response.json()
     assert ticket["ticket_number"].startswith("BEEP-")
-    assert ticket["status"] == "novo"
+    # Nasce direto em "em triagem" — sem analista atribuído, na caixa de
+    # entrada geral — e não em "novo" (ver ticket_service.create_ticket).
+    assert ticket["status"] == "em_triagem"
 
     detail = await employee_client.get(f"/api/v1/tickets/{ticket['id']}")
     assert detail.status_code == 200
