@@ -1,9 +1,9 @@
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
-from app.models.enums import TicketPriority, TicketSource, TicketStatus
+from app.models.enums import TicketClosureReason, TicketPriority, TicketSource, TicketStatus
 
 
 class TicketCreate(BaseModel):
@@ -38,6 +38,7 @@ class TicketRead(BaseModel):
     created_at: datetime
     updated_at: datetime
     closed_at: datetime | None
+    closure_reason: TicketClosureReason | None
 
 
 class TicketHistoryRead(BaseModel):
@@ -67,6 +68,10 @@ class TicketCommentCreate(BaseModel):
     # Nota interna (só analistas+ veem). Ignorado quando quem comenta é o
     # próprio solicitante — ver `POST /tickets/{id}/comments`.
     is_internal: bool = False
+    # Muda o status junto com a mensagem, numa só ação (o analista responde e
+    # o chamado já fica "aguardando colaborador"). Só analistas+; encerrar por
+    # aqui não é permitido — encerrar exige motivo, via /close.
+    new_status: TicketStatus | None = None
 
 
 class TicketTransfer(BaseModel):
@@ -82,6 +87,21 @@ class TicketPriorityUpdate(BaseModel):
 class TicketStatusUpdate(BaseModel):
     status: TicketStatus
     comment: str | None = None
+
+
+class TicketClose(BaseModel):
+    """Motivo é obrigatório — é o que permite reportar depois quantos chamados
+    foram encerrados por falta de interatividade em vez de resolvidos."""
+
+    reason: TicketClosureReason
+    # Vazio usa a mensagem padrão do motivo (ver CLOSURE_DEFAULT_MESSAGE).
+    message: str | None = Field(default=None, max_length=4000)
+
+
+class ClosureReasonOption(BaseModel):
+    value: TicketClosureReason
+    label: str
+    default_message: str
 
 
 class TicketRatingCreate(BaseModel):

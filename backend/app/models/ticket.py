@@ -7,7 +7,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
 from app.models.enum_types import pg_enum
-from app.models.enums import TicketPriority, TicketSource, TicketStatus
+from app.models.enums import TicketClosureReason, TicketPriority, TicketSource, TicketStatus
 from app.models.mixins import TimestampMixin, UUIDPKMixin
 
 
@@ -38,6 +38,11 @@ class Ticket(Base, UUIDPKMixin, TimestampMixin):
         UUID(as_uuid=True), ForeignKey("chat_conversations.id"), nullable=True
     )
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Nulo enquanto aberto. Obrigatório no encerramento (ver `close_ticket`) —
+    # é o que separa "resolvido" de "morreu por falta de retorno" no relatório.
+    closure_reason: Mapped[TicketClosureReason | None] = mapped_column(
+        pg_enum(TicketClosureReason, "ticket_closure_reason"), nullable=True
+    )
 
     department = relationship("Department", back_populates="tickets")
     history = relationship("TicketHistory", back_populates="ticket", cascade="all, delete-orphan")

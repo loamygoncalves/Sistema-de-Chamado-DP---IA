@@ -5,6 +5,7 @@ import clsx from "clsx";
 import { api } from "@/lib/api";
 import type {
   Department,
+  TicketClosureReason,
   TicketDetail,
   TicketPriority,
   TicketStatus,
@@ -13,6 +14,15 @@ import type {
 import { PriorityBadge, StatusBadge } from "@/components/TicketStatusBadge";
 import SlaCountdown from "@/components/SlaCountdown";
 import TicketConversation from "@/components/TicketConversation";
+import CloseTicketForm from "@/components/CloseTicketForm";
+
+const CLOSURE_REASON_LABEL: Record<TicketClosureReason, string> = {
+  resolvido: "Resolvido",
+  sem_interatividade: "Encerrado por falta de interatividade",
+  duplicado: "Duplicado de outro chamado",
+  resolvido_pelo_colaborador: "Já resolvido pelo colaborador",
+  cancelado_pelo_colaborador: "Cancelado pelo colaborador",
+};
 
 const STATUS_OPTIONS: { value: TicketStatus; label: string }[] = [
   { value: "novo", label: "Novo" },
@@ -44,6 +54,10 @@ export default function AnalystTicketWorkspace({ ticketId }: { ticketId: string 
   const [analysts, setAnalysts] = useState<User[]>([]);
   const [draft, setDraft] = useState("");
   const [mode, setMode] = useState<ReplyMode>("publica");
+  // Status aplicado junto com a resposta. Pré-preenchido com "aguardando
+  // colaborador" porque é o caso comum ao responder, mas fica visível e
+  // editável — nem toda resposta devolve a bola para o colaborador.
+  const [statusOnReply, setStatusOnReply] = useState<TicketStatus>("aguardando_usuario");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -78,8 +92,15 @@ export default function AnalystTicketWorkspace({ ticketId }: { ticketId: string 
   async function sendReply() {
     const comment = draft.trim();
     if (!comment || busy) return;
+    const isInternalNote = mode === "interna";
     await run(async () => {
-      await api.post(`/tickets/${ticketId}/comments`, { comment, is_internal: mode === "interna" });
+      await api.post(`/tickets/${ticketId}/comments`, {
+        comment,
+        is_internal: isInternalNote,
+        // Nota interna não muda o estado do atendimento — ela é registro do
+        // time, não uma devolução da bola para o colaborador.
+        new_status: isInternalNote ? null : statusOnReply,
+      });
       setDraft("");
     });
   }
@@ -179,18 +200,39 @@ export default function AnalystTicketWorkspace({ ticketId }: { ticketId: string 
             )}
           />
 
-          <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
             <span className="text-xs text-slate-400">Ctrl/⌘ + Enter para enviar</span>
-            <button
-              onClick={sendReply}
-              disabled={busy || !draft.trim()}
-              className={clsx(
-                "inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-medium text-white transition disabled:opacity-50",
-                isInternal ? "bg-amber-700 hover:bg-amber-800" : "bg-brand-700 hover:bg-brand-800",
+            <div className="flex flex-wrap items-center gap-2">
+              {!isInternal && (
+                <label className="flex items-center gap-2 text-xs text-slate-500">
+                  Ao enviar, marcar como
+                  <select
+                    value={statusOnReply}
+                    disabled={busy}
+                    onChange={(e) => setStatusOnReply(e.target.value as TicketStatus)}
+                    className="rounded-lg border border-slate-300 px-2 py-1.5 text-xs text-slate-900"
+                  >
+                    {/* Encerrar não aparece aqui: exige motivo, e isso é feito
+                        no bloco "Encerrar chamado" do painel lateral. */}
+                    {STATUS_OPTIONS.filter((s) => s.value !== "encerrado").map((s) => (
+                      <option key={s.value} value={s.value}>
+                        {s.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
               )}
-            >
-              {busy ? "Enviando..." : isInternal ? "Salvar nota interna" : "Enviar resposta"}
-            </button>
+              <button
+                onClick={sendReply}
+                disabled={busy || !draft.trim()}
+                className={clsx(
+                  "inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-medium text-white transition disabled:opacity-50",
+                  isInternal ? "bg-amber-700 hover:bg-amber-800" : "bg-brand-700 hover:bg-brand-800",
+                )}
+              >
+                {busy ? "Enviando..." : isInternal ? "Salvar nota interna" : "Enviar resposta"}
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -259,13 +301,16 @@ export default function AnalystTicketWorkspace({ ticketId }: { ticketId: string 
             Status
             <select
               value={ticket.status}
-              disabled={busy}
+              disabled={busy || isClosed}
               onChange={(e) =>
                 run(() => api.patch(`/tickets/${ticketId}/status`, { status: e.target.value as TicketStatus }))
               }
               className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900"
             >
-              {STATUS_OPTIONS.map((s) => (
+              {/* "Encerrado" não é opção aqui: encerrar exige motivo e passa
+                  pelo bloco abaixo. Aparece só se o chamado já está fechado,
+                  para o select refletir o estado real. */}
+              {STATUS_OPTIONS.filter((s) => s.value !== "encerrado" || isClosed).map((s) => (
                 <option key={s.value} value={s.value}>
                   {s.label}
                 </option>
@@ -313,17 +358,24 @@ export default function AnalystTicketWorkspace({ ticketId }: { ticketId: string 
             </select>
           </label>
 
-          <button
-            className="btn-primary w-full text-sm"
-            disabled={busy || isClosed}
-            onClick={() => run(() => api.post(`/tickets/${ticketId}/close`, { status: "encerrado" }))}
-          >
-            {isClosed ? "Chamado encerrado" : "Encerrar chamado"}
-          </button>
-          <p className="text-xs text-slate-400">
-            Ao encerrar, a IA gera um artigo de conhecimento a partir da resolução — dúvidas
-            iguais passam a ser respondidas sem abrir chamado.
-          </p>
+        </div>
+
+        <div className="card space-y-3">
+          <h2 className="text-sm font-semibold">Encerrar chamado</h2>
+          {isClosed ? (
+            <p className="text-xs text-slate-500">
+              Encerrado em {ticket.closed_at ? new Date(ticket.closed_at).toLocaleString("pt-BR") : "—"}
+              {ticket.closure_reason && ` · Motivo: ${CLOSURE_REASON_LABEL[ticket.closure_reason]}`}
+            </p>
+          ) : (
+            <>
+              <CloseTicketForm ticketId={ticketId} onClosed={reload} />
+              <p className="text-xs text-slate-400">
+                Encerrando como <strong>resolvido</strong>, a IA gera um artigo de conhecimento a
+                partir da resolução — dúvidas iguais passam a ser respondidas sem abrir chamado.
+              </p>
+            </>
+          )}
         </div>
       </aside>
     </div>

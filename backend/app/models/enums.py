@@ -30,6 +30,35 @@ class TicketSource(str, enum.Enum):
     MANUAL = "manual"
 
 
+class TicketClosureReason(str, enum.Enum):
+    """Motivo do encerramento — obrigatório ao encerrar. É o que permite
+    separar, no relatório, o que foi de fato resolvido do que morreu por
+    falta de retorno do colaborador."""
+
+    RESOLVIDO = "resolvido"
+    SEM_INTERATIVIDADE = "sem_interatividade"
+    DUPLICADO = "duplicado"
+    RESOLVIDO_PELO_COLABORADOR = "resolvido_pelo_colaborador"
+    CANCELADO_PELO_COLABORADOR = "cancelado_pelo_colaborador"
+
+
+# Quem pode encerrar com qual motivo. "Sem interatividade" é um julgamento do
+# time de atendimento; "cancelado"/"resolvi sozinho" é do colaborador.
+CLOSURE_REASONS_STAFF = frozenset(
+    {
+        TicketClosureReason.RESOLVIDO,
+        TicketClosureReason.SEM_INTERATIVIDADE,
+        TicketClosureReason.DUPLICADO,
+    }
+)
+CLOSURE_REASONS_REQUESTER = frozenset(
+    {
+        TicketClosureReason.RESOLVIDO_PELO_COLABORADOR,
+        TicketClosureReason.CANCELADO_PELO_COLABORADOR,
+    }
+)
+
+
 class KnowledgeSourceType(str, enum.Enum):
     MANUAL = "manual"
     FAQ = "faq"

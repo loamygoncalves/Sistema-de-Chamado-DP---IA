@@ -48,13 +48,14 @@ chamado a cada pergunta que a IA não consiga responder com segurança.
 | POST | `/tickets` | Abre chamado manualmente | employee+ |
 | GET | `/tickets` | Lista com filtros (`status`, `department_id`, `priority`, `assigned_to`, `mine`) | employee+ (escopo próprio) / analyst+ (fila) |
 | GET | `/tickets/{id}` | Detalhe + histórico da conversa, com nomes já resolvidos (`requester_name`, `requester_email`, `assigned_to_name`, `department_name`, e `actor_name` em cada evento). **Notas internas são omitidas quando quem consulta é o solicitante** | dono ou analyst+ |
-| POST | `/tickets/{id}/comments` | Adiciona mensagem à conversa do chamado. `{"comment": "...", "is_internal": false}` — com `is_internal: true` grava uma **nota interna**, visível só para analyst+ (a flag é ignorada se quem comenta é o próprio solicitante) | dono ou analyst+ |
+| POST | `/tickets/{id}/comments` | Adiciona mensagem à conversa. `{"comment": "...", "is_internal": false, "new_status": "aguardando_usuario"}` — `is_internal: true` grava **nota interna** (visível só a analyst+; a flag é ignorada se quem comenta é o solicitante); `new_status` muda o status na mesma ação (só analyst+, e **não** aceita `encerrado`) | dono ou analyst+ |
 | POST | `/tickets/{id}/attachments` | Upload de anexo | dono ou analyst+ |
 | POST | `/tickets/{id}/assume` | Analista assume o chamado | analyst+ |
 | POST | `/tickets/{id}/transfer` | Transfere para outro analista/fila | analyst+ |
 | PATCH | `/tickets/{id}/priority` | Altera prioridade (recalcula SLA) | analyst+ |
-| PATCH | `/tickets/{id}/status` | Altera status | analyst+ |
-| POST | `/tickets/{id}/close` | Encerra chamado (dispara aprendizado contínuo) | analyst+ |
+| PATCH | `/tickets/{id}/status` | Altera status. **Não encerra**: `encerrado` retorna `400` — encerrar exige motivo e passa por `/close` | analyst+ |
+| GET | `/tickets/closure-reasons` | Motivos de encerramento que **este** usuário pode usar, com a mensagem padrão de cada um (o texto mora no backend, para não haver duas cópias) | employee+ |
+| POST | `/tickets/{id}/close` | Encerra o chamado. `{"reason": "...", "message": "..."}` — **`reason` é obrigatório** (`422` sem ele). `message` vazia usa a mensagem padrão do motivo. `409` se já estiver encerrado; `403` se o motivo não for permitido ao perfil. O aprendizado contínuo só dispara para `reason=resolvido` | dono (motivos do colaborador) ou analyst+ (motivos do DP) |
 | POST | `/tickets/{id}/rating` | Colaborador avalia atendimento (1-5) | dono |
 
 ## Base de conhecimento

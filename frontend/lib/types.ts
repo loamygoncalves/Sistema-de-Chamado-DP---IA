@@ -29,6 +29,22 @@ export type TicketStatus =
 export type TicketPriority = "baixa" | "media" | "alta" | "critica";
 export type TicketSource = "ia_automatico" | "ia_sugerido" | "manual";
 
+export type TicketClosureReason =
+  | "resolvido"
+  | "sem_interatividade"
+  | "duplicado"
+  | "resolvido_pelo_colaborador"
+  | "cancelado_pelo_colaborador";
+
+/** Motivos que o usuário atual pode usar, servidos por
+ *  `GET /tickets/closure-reasons` — as mensagens padrão moram no backend
+ *  para não existirem duas cópias do texto. */
+export interface ClosureReasonOption {
+  value: TicketClosureReason;
+  label: string;
+  default_message: string;
+}
+
 export interface Ticket {
   id: string;
   ticket_number: string;
@@ -48,6 +64,7 @@ export interface Ticket {
   created_at: string;
   updated_at: string;
   closed_at: string | null;
+  closure_reason: TicketClosureReason | null;
 }
 
 export interface TicketHistoryEntry {

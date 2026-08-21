@@ -5,7 +5,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.department import Department
-from app.models.enums import TicketPriority, TicketSource, TicketStatus
+from app.models.enums import TicketClosureReason, TicketPriority, TicketSource, TicketStatus
 from app.models.ticket import Ticket, TicketHistory
 from app.models.user import User
 from app.services.ai_settings_service import get_ai_settings
@@ -17,6 +17,42 @@ SLA_HOURS_BY_PRIORITY_DEFAULT = {
     TicketPriority.ALTA: 24,
     TicketPriority.CRITICA: 4,
 }
+
+# Mensagem que o colaborador recebe no encerramento. Fica no backend (e é
+# servida ao frontend por `GET /tickets/closure-reasons`) para não haver duas
+# cópias do texto divergindo entre a tela do analista e a do colaborador.
+CLOSURE_DEFAULT_MESSAGE = {
+    TicketClosureReason.RESOLVIDO: (
+        "Seu chamado foi resolvido. Agradecemos o contato! Se surgir qualquer nova dúvida, "
+        "é só abrir um novo chamado que seguimos te ajudando."
+    ),
+    TicketClosureReason.SEM_INTERATIVIDADE: (
+        "Estamos encerrando este chamado por falta de retorno. Agradecemos o contato! "
+        "Se ainda precisar de ajuda com esse assunto, é só abrir um novo chamado."
+    ),
+    TicketClosureReason.DUPLICADO: (
+        "Este chamado foi encerrado porque já existe outro em andamento sobre o mesmo "
+        "assunto — o atendimento segue por lá. Agradecemos o contato!"
+    ),
+    TicketClosureReason.RESOLVIDO_PELO_COLABORADOR: "Encerrado pelo colaborador: assunto já resolvido.",
+    TicketClosureReason.CANCELADO_PELO_COLABORADOR: "Encerrado pelo colaborador: não é mais necessário.",
+}
+
+CLOSURE_REASON_LABEL = {
+    TicketClosureReason.RESOLVIDO: "Resolvido",
+    TicketClosureReason.SEM_INTERATIVIDADE: "Encerrado por falta de interatividade",
+    TicketClosureReason.DUPLICADO: "Duplicado de outro chamado",
+    TicketClosureReason.RESOLVIDO_PELO_COLABORADOR: "Já resolvi, obrigado",
+    TicketClosureReason.CANCELADO_PELO_COLABORADOR: "Não preciso mais",
+}
+
+
+class TicketAlreadyClosedError(Exception):
+    pass
+
+
+class StatusChangeNotAllowedError(Exception):
+    pass
 
 
 async def _next_ticket_number(db: AsyncSession) -> str:
@@ -111,10 +147,54 @@ async def change_priority(db: AsyncSession, ticket: Ticket, actor: User, priorit
 
 
 async def change_status(db: AsyncSession, ticket: Ticket, actor: User, status: TicketStatus, comment: str | None) -> Ticket:
-    ticket.status = status
+    """Muda o status, exceto para ENCERRADO — encerrar exige motivo, então
+    passa obrigatoriamente por `close_ticket()`. Sem essa guarda, este
+    endpoint seria um caminho alternativo para encerrar sem registrar motivo,
+    e o relatório de "encerrado por falta de interatividade" ficaria furado."""
     if status == TicketStatus.ENCERRADO:
-        ticket.closed_at = datetime.now(timezone.utc)
+        raise StatusChangeNotAllowedError(
+            "Para encerrar o chamado é obrigatório informar o motivo — use POST /tickets/{id}/close."
+        )
+    ticket.status = status
     db.add(TicketHistory(ticket_id=ticket.id, actor_id=actor.id, action="status_alterado", comment=comment or status.value))
+    await db.flush()
+    return ticket
+
+
+async def close_ticket(
+    db: AsyncSession,
+    ticket: Ticket,
+    actor: User,
+    *,
+    reason: TicketClosureReason,
+    message: str | None = None,
+) -> Ticket:
+    """Encerra o chamado registrando o motivo (estruturado, para relatório) e
+    uma mensagem de encerramento que o colaborador vê na conversa."""
+    if ticket.status == TicketStatus.ENCERRADO:
+        raise TicketAlreadyClosedError("Este chamado já está encerrado.")
+
+    ticket.status = TicketStatus.ENCERRADO
+    ticket.closed_at = datetime.now(timezone.utc)
+    ticket.closure_reason = reason
+
+    # A mensagem entra como fala pública para o colaborador ler no chamado; o
+    # motivo entra como evento de fluxo, para a timeline e para o relatório.
+    body = (message or "").strip() or CLOSURE_DEFAULT_MESSAGE[reason]
+    db.add(
+        TicketHistory(
+            ticket_id=ticket.id, actor_id=actor.id, action="comentario", comment=body, is_internal=False
+        )
+    )
+    db.add(
+        TicketHistory(
+            ticket_id=ticket.id,
+            actor_id=actor.id,
+            action="encerrado",
+            comment=CLOSURE_REASON_LABEL[reason],
+            extra_data={"closure_reason": reason.value},
+        )
+    )
     await db.flush()
     return ticket
 

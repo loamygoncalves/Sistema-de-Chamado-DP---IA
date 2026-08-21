@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
@@ -130,10 +132,13 @@ async def test_analyst_full_lifecycle(analyst_client: AsyncClient, department: D
     comment = await analyst_client.post(f"/api/v1/tickets/{ticket.id}/comments", json={"comment": "Analisando o caso."})
     assert comment.status_code == 200
 
-    close = await analyst_client.post(f"/api/v1/tickets/{ticket.id}/close", json={"status": "encerrado", "comment": "Resolvido."})
+    close = await analyst_client.post(
+        f"/api/v1/tickets/{ticket.id}/close", json={"reason": "resolvido", "message": "Resolvido."}
+    )
     assert close.status_code == 200
     assert close.json()["status"] == "encerrado"
     assert close.json()["closed_at"] is not None
+    assert close.json()["closure_reason"] == "resolvido"
 
 
 async def test_ticket_priority_recomputes_sla(analyst_client: AsyncClient, department: Department, employee_user: User, db_session):
@@ -246,3 +251,140 @@ async def test_ticket_detail_resolves_names_for_the_analyst_screen(
     assert detail["department_name"] == department.name
     # O autor de cada evento vem resolvido para a timeline não mostrar UUID.
     assert any(h["actor_name"] == employee_user.name for h in detail["history"])
+
+
+async def _open_ticket(db_session, employee_user: User, department: Department, subject="Chamado de teste"):
+    from app.services import ticket_service
+
+    ticket = await ticket_service.create_ticket(
+        db_session,
+        requester=employee_user,
+        department_id=department.id,
+        subject=subject,
+        description="Descrição de teste.",
+    )
+    await db_session.commit()
+    return ticket
+
+
+async def test_closing_without_reason_is_rejected(analyst_client: AsyncClient, department: Department, employee_user: User, db_session):
+    ticket = await _open_ticket(db_session, employee_user, department)
+    response = await analyst_client.post(f"/api/v1/tickets/{ticket.id}/close", json={})
+    assert response.status_code == 422
+
+
+async def test_closing_as_resolved_posts_thank_you_message_to_the_employee(
+    client_as, department: Department, employee_user: User, analyst_user: User, db_session
+):
+    ticket = await _open_ticket(db_session, employee_user, department)
+
+    async with client_as(analyst_user) as analyst:
+        # Sem mensagem explícita, entra a mensagem padrão do motivo.
+        closed = await analyst.post(f"/api/v1/tickets/{ticket.id}/close", json={"reason": "resolvido"})
+        assert closed.status_code == 200
+        assert closed.json()["closure_reason"] == "resolvido"
+
+    async with client_as(employee_user) as employee:
+        history = (await employee.get(f"/api/v1/tickets/{ticket.id}")).json()["history"]
+
+    falas = [h["comment"] for h in history if h["action"] == "comentario"]
+    assert any("Agradecemos o contato" in (c or "") for c in falas)
+    assert any("abrir um novo chamado" in (c or "") for c in falas)
+    # O motivo também fica como evento na timeline, para relatório e auditoria.
+    assert any(h["action"] == "encerrado" for h in history)
+
+
+async def test_closing_for_lack_of_response_is_recorded_and_skips_article_generation(
+    analyst_client: AsyncClient, department: Department, employee_user: User, db_session
+):
+    ticket = await _open_ticket(db_session, employee_user, department)
+
+    with patch("app.api.v1.tickets.generate_article_from_closed_ticket_task.delay") as delay:
+        response = await analyst_client.post(
+            f"/api/v1/tickets/{ticket.id}/close", json={"reason": "sem_interatividade"}
+        )
+        assert response.status_code == 200
+        assert response.json()["closure_reason"] == "sem_interatividade"
+        # Chamado morto por falta de retorno não tem solução para ensinar à IA.
+        delay.assert_not_called()
+
+
+async def test_closing_as_resolved_triggers_article_generation(
+    analyst_client: AsyncClient, department: Department, employee_user: User, db_session
+):
+    ticket = await _open_ticket(db_session, employee_user, department)
+
+    with patch("app.api.v1.tickets.generate_article_from_closed_ticket_task.delay") as delay:
+        response = await analyst_client.post(f"/api/v1/tickets/{ticket.id}/close", json={"reason": "resolvido"})
+        assert response.status_code == 200
+        delay.assert_called_once_with(str(ticket.id))
+
+
+async def test_requester_can_close_own_ticket_but_not_with_staff_reason(
+    employee_client: AsyncClient, department: Department, employee_user: User, db_session
+):
+    outro = await _open_ticket(db_session, employee_user, department, subject="Vou cancelar")
+
+    # "Falta de interatividade" é julgamento do DP, não do colaborador.
+    negado = await employee_client.post(f"/api/v1/tickets/{outro.id}/close", json={"reason": "sem_interatividade"})
+    assert negado.status_code == 403
+
+    ok = await employee_client.post(f"/api/v1/tickets/{outro.id}/close", json={"reason": "cancelado_pelo_colaborador"})
+    assert ok.status_code == 200
+    assert ok.json()["closure_reason"] == "cancelado_pelo_colaborador"
+
+
+async def test_closing_twice_conflicts(analyst_client: AsyncClient, department: Department, employee_user: User, db_session):
+    ticket = await _open_ticket(db_session, employee_user, department)
+    first = await analyst_client.post(f"/api/v1/tickets/{ticket.id}/close", json={"reason": "resolvido"})
+    assert first.status_code == 200
+    again = await analyst_client.post(f"/api/v1/tickets/{ticket.id}/close", json={"reason": "resolvido"})
+    assert again.status_code == 409
+
+
+async def test_patch_status_cannot_be_used_to_close_without_a_reason(
+    analyst_client: AsyncClient, department: Department, employee_user: User, db_session
+):
+    ticket = await _open_ticket(db_session, employee_user, department)
+    response = await analyst_client.patch(f"/api/v1/tickets/{ticket.id}/status", json={"status": "encerrado"})
+    assert response.status_code == 400
+    assert "motivo" in response.json()["detail"].lower()
+
+    detail = (await analyst_client.get(f"/api/v1/tickets/{ticket.id}")).json()
+    assert detail["status"] != "encerrado"
+    assert detail["closure_reason"] is None
+
+
+async def test_reply_can_change_status_in_the_same_action(
+    analyst_client: AsyncClient, department: Department, employee_user: User, db_session
+):
+    ticket = await _open_ticket(db_session, employee_user, department)
+    response = await analyst_client.post(
+        f"/api/v1/tickets/{ticket.id}/comments",
+        json={"comment": "Precisa me mandar o comprovante.", "new_status": "aguardando_usuario"},
+    )
+    assert response.status_code == 200
+    assert response.json()["status"] == "aguardando_usuario"
+
+
+async def test_reply_cannot_close_the_ticket_through_new_status(
+    analyst_client: AsyncClient, department: Department, employee_user: User, db_session
+):
+    ticket = await _open_ticket(db_session, employee_user, department)
+    response = await analyst_client.post(
+        f"/api/v1/tickets/{ticket.id}/comments",
+        json={"comment": "Fechando por aqui.", "new_status": "encerrado"},
+    )
+    assert response.status_code == 400
+
+
+async def test_closure_reasons_endpoint_differs_by_role(client_as, employee_user: User, analyst_user: User):
+    async with client_as(analyst_user) as analyst:
+        staff = [r["value"] for r in (await analyst.get("/api/v1/tickets/closure-reasons")).json()]
+    async with client_as(employee_user) as employee:
+        requester = [r["value"] for r in (await employee.get("/api/v1/tickets/closure-reasons")).json()]
+
+    assert "sem_interatividade" in staff
+    assert "sem_interatividade" not in requester
+    assert "cancelado_pelo_colaborador" in requester
+    assert "cancelado_pelo_colaborador" not in staff

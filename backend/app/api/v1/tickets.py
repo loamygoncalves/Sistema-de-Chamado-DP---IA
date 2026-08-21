@@ -7,10 +7,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.deps import ROLE_RANK, require_analyst, require_employee
 from app.db.session import get_db
 from app.models.department import Department
-from app.models.enums import TicketStatus, UserRole
+from app.models.enums import (
+    CLOSURE_REASONS_REQUESTER,
+    CLOSURE_REASONS_STAFF,
+    TicketClosureReason,
+    TicketStatus,
+    UserRole,
+)
 from app.models.ticket import Ticket, TicketAttachment
 from app.models.user import User
 from app.schemas.ticket import (
+    ClosureReasonOption,
+    TicketClose,
     TicketCommentCreate,
     TicketCreate,
     TicketDetail,
@@ -83,6 +91,25 @@ async def list_tickets(
     return result.scalars().all()
 
 
+# Declarado ANTES de `/{ticket_id}`: o FastAPI resolve rotas na ordem de
+# registro, então com esta depois o path "closure-reasons" cairia no
+# parâmetro ticket_id e falharia a validação de UUID.
+@router.get("/closure-reasons", response_model=list[ClosureReasonOption])
+async def closure_reasons(user: User = Depends(require_employee)):
+    """Motivos que ESTE usuário pode usar para encerrar, com a mensagem padrão
+    de cada um. Serve o frontend para não haver duas cópias dos textos."""
+    allowed = CLOSURE_REASONS_STAFF if _is_staff(user) else CLOSURE_REASONS_REQUESTER
+    return [
+        ClosureReasonOption(
+            value=reason,
+            label=ticket_service.CLOSURE_REASON_LABEL[reason],
+            default_message=ticket_service.CLOSURE_DEFAULT_MESSAGE[reason],
+        )
+        for reason in TicketClosureReason
+        if reason in allowed
+    ]
+
+
 @router.get("/{ticket_id}", response_model=TicketDetail)
 async def get_ticket(ticket_id: uuid.UUID, user: User = Depends(require_employee), db: AsyncSession = Depends(get_db)):
     ticket = await _get_ticket_or_404(db, ticket_id)
@@ -129,8 +156,18 @@ async def add_comment(
     # flag, ela é ignorada em vez de criar uma nota que ele mesmo não veria.
     is_internal = payload.is_internal and _is_staff(user)
     history = await ticket_service.add_comment(db, ticket, user, payload.comment, is_internal=is_internal)
+
+    # Responder e mudar o status numa só ação (ex.: respondeu e o chamado já
+    # fica "aguardando colaborador"). Encerrar por aqui não passa: cai na
+    # guarda de `change_status`, que exige motivo via /close.
+    if payload.new_status and _is_staff(user) and payload.new_status != ticket.status:
+        try:
+            await ticket_service.change_status(db, ticket, user, payload.new_status, None)
+        except ticket_service.StatusChangeNotAllowedError as exc:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
+
     await db.commit()
-    return {"id": history.id, "is_internal": history.is_internal}
+    return {"id": history.id, "is_internal": history.is_internal, "status": ticket.status}
 
 
 @router.post("/{ticket_id}/attachments")
@@ -191,7 +228,10 @@ async def update_status(
     ticket_id: uuid.UUID, payload: TicketStatusUpdate, analyst: User = Depends(require_analyst), db: AsyncSession = Depends(get_db)
 ):
     ticket = await _get_ticket_or_404(db, ticket_id)
-    ticket = await ticket_service.change_status(db, ticket, analyst, payload.status, payload.comment)
+    try:
+        ticket = await ticket_service.change_status(db, ticket, analyst, payload.status, payload.comment)
+    except ticket_service.StatusChangeNotAllowedError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
     await db.commit()
     await db.refresh(ticket)
     return ticket
@@ -199,15 +239,40 @@ async def update_status(
 
 @router.post("/{ticket_id}/close", response_model=TicketRead)
 async def close_ticket(
-    ticket_id: uuid.UUID, payload: TicketStatusUpdate, analyst: User = Depends(require_analyst), db: AsyncSession = Depends(get_db)
+    ticket_id: uuid.UUID, payload: TicketClose, user: User = Depends(require_employee), db: AsyncSession = Depends(get_db)
 ):
+    """Encerra o chamado. O solicitante também pode encerrar o próprio
+    chamado, mas com motivos diferentes dos do time de atendimento — só o DP
+    pode encerrar por "falta de interatividade", por exemplo."""
     ticket = await _get_ticket_or_404(db, ticket_id)
-    ticket = await ticket_service.change_status(db, ticket, analyst, TicketStatus.ENCERRADO, payload.comment)
-    await record_audit_log(db, user_id=analyst.id, action="ticket_encerrado", entity="ticket", entity_id=str(ticket.id))
+    _assert_can_view(ticket, user)
+
+    allowed = CLOSURE_REASONS_STAFF if _is_staff(user) else CLOSURE_REASONS_REQUESTER
+    if payload.reason not in allowed:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            f"Motivo de encerramento não permitido para o seu perfil: {payload.reason.value}",
+        )
+
+    try:
+        ticket = await ticket_service.close_ticket(db, ticket, user, reason=payload.reason, message=payload.message)
+    except ticket_service.TicketAlreadyClosedError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+
+    await record_audit_log(
+        db,
+        user_id=user.id,
+        action="ticket_encerrado",
+        entity="ticket",
+        entity_id=str(ticket.id),
+    )
     await db.commit()
     await db.refresh(ticket)
 
-    generate_article_from_closed_ticket_task.delay(str(ticket.id))
+    # Só vale gerar artigo de conhecimento do que foi de fato resolvido —
+    # chamado morto por falta de retorno não tem solução para ensinar à IA.
+    if ticket.closure_reason == TicketClosureReason.RESOLVIDO:
+        generate_article_from_closed_ticket_task.delay(str(ticket.id))
     return ticket
 
 

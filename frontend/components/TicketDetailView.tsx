@@ -7,6 +7,7 @@ import type { TicketDetail } from "@/lib/types";
 import { PriorityBadge, StatusBadge } from "@/components/TicketStatusBadge";
 import SlaCountdown from "@/components/SlaCountdown";
 import TicketConversation from "@/components/TicketConversation";
+import CloseTicketForm from "@/components/CloseTicketForm";
 
 /** Visão do colaborador sobre o próprio chamado: acompanha a conversa,
  *  responde ao analista e avalia o atendimento no fim. As ações de
@@ -91,6 +92,17 @@ export default function TicketDetailView({ ticketId }: { ticketId: string }) {
             </button>
           </div>
         </form>
+      )}
+
+      {isOwner && ticket.status !== "encerrado" && (
+        <details className="card">
+          <summary className="cursor-pointer text-sm font-medium text-slate-700">
+            Não preciso mais deste chamado
+          </summary>
+          <div className="mt-3">
+            <CloseTicketForm ticketId={ticket.id} onClosed={reload} />
+          </div>
+        </details>
       )}
 
       {isOwner && ticket.status === "encerrado" && !rated && (

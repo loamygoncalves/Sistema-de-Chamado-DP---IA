@@ -79,7 +79,17 @@ SLA de 4h aberto numa sexta às 23h só vence na segunda-feira.
 | assigned_to | UUID FK → users NULLABLE | analista responsável |
 | source | ENUM(`ia_automatico`,`ia_sugerido`,`manual`) | origem da abertura |
 | origin_conversation_id | UUID FK → chat_conversations NULLABLE | |
+| closure_reason | ENUM NULLABLE | `resolvido`, `sem_interatividade`, `duplicado`, `resolvido_pelo_colaborador`, `cancelado_pelo_colaborador`. Nulo enquanto aberto; **obrigatório no encerramento** |
 | created_at / updated_at / closed_at | TIMESTAMPTZ | |
+
+`closure_reason` é o que permite reportar quantos chamados foram de fato
+resolvidos versus encerrados por falta de retorno do colaborador. Por isso
+`PATCH /tickets/{id}/status` recusa `encerrado` (retorna `400`): encerrar só
+acontece por `POST /tickets/{id}/close`, que exige o motivo. Sem essa guarda
+haveria um caminho para fechar chamado sem motivo e o relatório ficaria furado.
+O aprendizado contínuo (geração de artigo pela IA) só dispara em
+`closure_reason = resolvido` — chamado morto por falta de retorno não tem
+solução para ensinar à IA.
 
 ### `ticket_history`
 `id, ticket_id FK, actor_id FK users NULLABLE, action, comment,
