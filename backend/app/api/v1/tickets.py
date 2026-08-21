@@ -1,7 +1,7 @@
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, status
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import ROLE_RANK, require_analyst, require_employee
@@ -18,6 +18,7 @@ from app.models.ticket import Ticket, TicketAttachment
 from app.models.user import User
 from app.schemas.ticket import (
     ClosureReasonOption,
+    TicketAttachmentRead,
     TicketClose,
     TicketCommentCreate,
     TicketCreate,
@@ -29,9 +30,9 @@ from app.schemas.ticket import (
     TicketStatusUpdate,
     TicketTransfer,
 )
-from app.services import ticket_service
+from app.services import storage_service, ticket_service
 from app.services.audit_service import record_audit_log
-from app.workers.tasks import generate_article_from_closed_ticket_task
+from app.workers.tasks import generate_article_from_closed_ticket_task, send_ticket_email_task
 
 router = APIRouter(prefix="/tickets", tags=["tickets"])
 
@@ -67,6 +68,7 @@ async def open_ticket(payload: TicketCreate, user: User = Depends(require_employ
     await record_audit_log(db, user_id=user.id, action="ticket_criado", entity="ticket", entity_id=str(ticket.id))
     await db.commit()
     await db.refresh(ticket)
+    send_ticket_email_task.delay(str(ticket.id), "aberto")
     return ticket
 
 
@@ -74,6 +76,8 @@ async def open_ticket(payload: TicketCreate, user: User = Depends(require_employ
 async def list_tickets(
     status_filter: TicketStatus | None = Query(None, alias="status"),
     department_id: uuid.UUID | None = None,
+    assigned_to: uuid.UUID | None = None,
+    q: str | None = Query(None, description="Busca por protocolo, matrícula, assunto ou nome do solicitante"),
     mine: bool = False,
     user: User = Depends(require_employee),
     db: AsyncSession = Depends(get_db),
@@ -86,6 +90,18 @@ async def list_tickets(
         query = query.where(Ticket.status == status_filter)
     if department_id:
         query = query.where(Ticket.department_id == department_id)
+    if assigned_to:
+        query = query.where(Ticket.assigned_to == assigned_to)
+    if q:
+        pattern = f"%{q}%"
+        query = query.outerjoin(User, Ticket.requester_id == User.id).where(
+            or_(
+                Ticket.ticket_number.ilike(pattern),
+                Ticket.matricula.ilike(pattern),
+                Ticket.subject.ilike(pattern),
+                User.name.ilike(pattern),
+            )
+        )
     query = query.order_by(Ticket.created_at.desc())
     result = await db.execute(query)
     return result.scalars().all()
@@ -114,7 +130,7 @@ async def closure_reasons(user: User = Depends(require_employee)):
 async def get_ticket(ticket_id: uuid.UUID, user: User = Depends(require_employee), db: AsyncSession = Depends(get_db)):
     ticket = await _get_ticket_or_404(db, ticket_id)
     _assert_can_view(ticket, user)
-    await db.refresh(ticket, attribute_names=["history"])
+    await db.refresh(ticket, attribute_names=["history", "attachments"])
 
     history = sorted(ticket.history, key=lambda h: h.created_at)
     if not _is_staff(user):
@@ -139,6 +155,7 @@ async def get_ticket(ticket_id: uuid.UUID, user: User = Depends(require_employee
             )
             for h in history
         ],
+        attachments=[TicketAttachmentRead.model_validate(a) for a in ticket.attachments],
         requester_name=requester.name if requester else None,
         requester_email=requester.email if requester else None,
         assigned_to_name=assignee.name if assignee else None,
@@ -152,42 +169,51 @@ async def add_comment(
 ):
     ticket = await _get_ticket_or_404(db, ticket_id)
     _assert_can_view(ticket, user)
+    is_staff = _is_staff(user)
     # Só analistas+ podem registrar nota interna — se o solicitante mandar a
     # flag, ela é ignorada em vez de criar uma nota que ele mesmo não veria.
-    is_internal = payload.is_internal and _is_staff(user)
+    is_internal = payload.is_internal and is_staff
     history = await ticket_service.add_comment(db, ticket, user, payload.comment, is_internal=is_internal)
 
     # Responder e mudar o status numa só ação (ex.: respondeu e o chamado já
     # fica "aguardando colaborador"). Encerrar por aqui não passa: cai na
     # guarda de `change_status`, que exige motivo via /close.
-    if payload.new_status and _is_staff(user) and payload.new_status != ticket.status:
+    if payload.new_status and is_staff and payload.new_status != ticket.status:
         try:
             await ticket_service.change_status(db, ticket, user, payload.new_status, None)
         except ticket_service.StatusChangeNotAllowedError as exc:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
 
     await db.commit()
+    # Só a resposta PÚBLICA de um analista avisa o colaborador por e-mail —
+    # nota interna não é dele, e uma mensagem do próprio solicitante não
+    # precisa notificar ele mesmo.
+    if is_staff and not is_internal:
+        send_ticket_email_task.delay(str(ticket.id), "respondido")
     return {"id": history.id, "is_internal": history.is_internal, "status": ticket.status}
 
 
-@router.post("/{ticket_id}/attachments")
+@router.post("/{ticket_id}/attachments", response_model=TicketAttachmentRead)
 async def add_attachment(
     ticket_id: uuid.UUID, file: UploadFile, user: User = Depends(require_employee), db: AsyncSession = Depends(get_db)
 ):
     ticket = await _get_ticket_or_404(db, ticket_id)
     _assert_can_view(ticket, user)
     content = await file.read()
+    storage_path = f"tickets/{ticket.id}/{file.filename}"
+    await storage_service.upload_bytes(storage_path, content, file.content_type or "application/octet-stream")
     attachment = TicketAttachment(
         ticket_id=ticket.id,
         uploaded_by=user.id,
         filename=file.filename,
         content_type=file.content_type or "application/octet-stream",
-        storage_path=f"tickets/{ticket.id}/{file.filename}",
+        storage_path=storage_path,
         size_bytes=len(content),
     )
     db.add(attachment)
     await db.commit()
-    return {"id": attachment.id, "filename": attachment.filename}
+    await db.refresh(attachment)
+    return attachment
 
 
 @router.post("/{ticket_id}/assume", response_model=TicketRead)
@@ -268,6 +294,7 @@ async def close_ticket(
     )
     await db.commit()
     await db.refresh(ticket)
+    send_ticket_email_task.delay(str(ticket.id), "finalizado")
 
     # Só vale gerar artigo de conhecimento do que foi de fato resolvido —
     # chamado morto por falta de retorno não tem solução para ensinar à IA.

@@ -78,8 +78,18 @@ export interface TicketHistoryEntry {
   created_at: string;
 }
 
+export interface TicketAttachmentEntry {
+  id: string;
+  filename: string;
+  content_type: string;
+  size_bytes: number;
+  uploaded_by: string;
+  created_at: string;
+}
+
 export interface TicketDetail extends Ticket {
   history: TicketHistoryEntry[];
+  attachments: TicketAttachmentEntry[];
   requester_name: string | null;
   requester_email: string | null;
   assigned_to_name: string | null;
@@ -110,6 +120,11 @@ export interface TicketRef {
   ticket_number: string;
   priority: TicketPriority;
   sla_due_at: string | null;
+}
+
+export interface DraftTicketResponse {
+  subject: string;
+  description: string;
 }
 
 export interface MessageResponse {

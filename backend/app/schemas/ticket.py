@@ -53,8 +53,20 @@ class TicketHistoryRead(BaseModel):
     created_at: datetime
 
 
+class TicketAttachmentRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    filename: str
+    content_type: str
+    size_bytes: int
+    uploaded_by: uuid.UUID
+    created_at: datetime
+
+
 class TicketDetail(TicketRead):
     history: list[TicketHistoryRead] = []
+    attachments: list[TicketAttachmentRead] = []
     # Nomes resolvidos para a tela de atendimento — o analista precisa saber
     # com quem está falando e quem é o responsável, não só os UUIDs.
     requester_name: str | None = None

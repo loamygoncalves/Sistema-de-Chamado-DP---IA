@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
-import type { Conversation, Department, MessageResponse, TicketRef } from "@/lib/types";
+import { useAuth } from "@/lib/auth-context";
+import type { Conversation, Department, DraftTicketResponse, MessageResponse, TicketRef } from "@/lib/types";
 import ConfidenceBadge from "@/components/ConfidenceBadge";
 
 function formatSlaDeadline(slaDueAt: string | null): string {
@@ -20,12 +21,28 @@ interface DisplayMessage {
   declinedTicket?: boolean;
 }
 
+/** Estado do formulário de abertura de chamado — só um por vez, para a
+ * mensagem que o colaborador está confirmando no momento. */
+interface TicketDraftState {
+  messageId: string;
+  step: "form" | "review";
+  departmentId: string;
+  category: string;
+  files: File[];
+  subject: string;
+  description: string;
+  loading: boolean;
+  error: string | null;
+}
+
 export default function ChatPanel() {
+  const { user } = useAuth();
   const [conversation, setConversation] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<DisplayMessage[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [departments, setDepartments] = useState<Department[]>([]);
+  const [ticketDraft, setTicketDraft] = useState<TicketDraftState | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -92,23 +109,72 @@ export default function ChatPanel() {
     );
   }
 
-  async function openSuggestedTicket(messageId: string) {
-    if (!conversation || departments.length === 0) return;
-    const departmentId = window.prompt(
-      `Para qual fila deseja abrir o chamado?\n${departments.map((d, i) => `${i + 1}. ${d.name}`).join("\n")}`,
-      "1"
-    );
-    const index = Number(departmentId) - 1;
-    const department = departments[index];
-    if (!department) return;
-    const ticket = await api.post<TicketRef>(
-      `/chat/conversations/${conversation.id}/messages/${messageId}/open-ticket?department_id=${department.id}`
-    );
-    setMessages((prev) =>
-      prev.map((m) =>
-        m.response?.message_id === messageId ? { ...m, response: { ...m.response!, ticket } } : m
-      )
-    );
+  function startTicketForm(messageId: string) {
+    setTicketDraft({
+      messageId,
+      step: "form",
+      departmentId: departments[0]?.id ?? "",
+      category: "",
+      files: [],
+      subject: "",
+      description: "",
+      loading: false,
+      error: null,
+    });
+  }
+
+  function cancelTicketDraft() {
+    setTicketDraft(null);
+  }
+
+  async function requestTicketDraft() {
+    if (!conversation || !ticketDraft || !ticketDraft.departmentId) return;
+    setTicketDraft({ ...ticketDraft, loading: true, error: null });
+    try {
+      const draft = await api.post<DraftTicketResponse>(
+        `/chat/conversations/${conversation.id}/messages/${ticketDraft.messageId}/draft-ticket`,
+        { department_id: ticketDraft.departmentId, category: ticketDraft.category || undefined },
+      );
+      setTicketDraft((prev) =>
+        prev ? { ...prev, step: "review", subject: draft.subject, description: draft.description, loading: false } : prev,
+      );
+    } catch (err) {
+      setTicketDraft((prev) => (prev ? { ...prev, loading: false, error: (err as Error).message } : prev));
+    }
+  }
+
+  async function confirmTicketOpening() {
+    if (!conversation || !ticketDraft) return;
+    setTicketDraft({ ...ticketDraft, loading: true, error: null });
+    try {
+      const ticket = await api.post<TicketRef>(
+        `/chat/conversations/${conversation.id}/messages/${ticketDraft.messageId}/open-ticket`,
+        {
+          department_id: ticketDraft.departmentId,
+          category: ticketDraft.category || undefined,
+          subject: ticketDraft.subject,
+          description: ticketDraft.description,
+        },
+      );
+      // Anexos são enviados depois do chamado existir — cada arquivo é uma
+      // chamada separada, então uma falha isolada não derruba o chamado já
+      // criado (só aquele anexo específico não sobe).
+      await Promise.all(
+        ticketDraft.files.map((file) => {
+          const form = new FormData();
+          form.append("file", file);
+          return api.postForm(`/tickets/${ticket.id}/attachments`, form).catch(() => {});
+        }),
+      );
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.response?.message_id === ticketDraft.messageId ? { ...m, response: { ...m.response!, ticket } } : m
+        )
+      );
+      setTicketDraft(null);
+    } catch (err) {
+      setTicketDraft((prev) => (prev ? { ...prev, loading: false, error: (err as Error).message } : prev));
+    }
   }
 
   return (
@@ -187,30 +253,150 @@ export default function ChatPanel() {
                   </p>
                 )}
 
-                {message.wasHelpful === false && !message.response.ticket && !message.declinedTicket && (
-                  <div className="flex flex-wrap items-center gap-2 rounded-lg border border-accent-100 bg-accent-50 px-3 py-2">
-                    <span className="text-xs text-accent-700">
-                      Quer abrir um chamado para um analista do DP?
-                    </span>
-                    <button
-                      className="btn-primary text-xs"
-                      onClick={() => openSuggestedTicket(message.response!.message_id)}
-                    >
-                      Sim, abrir chamado
-                    </button>
-                    <button
-                      className="btn-secondary text-xs"
-                      onClick={() => declineTicket(message.response!.message_id)}
-                    >
-                      Agora não
-                    </button>
-                  </div>
-                )}
+                {message.wasHelpful === false &&
+                  !message.response.ticket &&
+                  !message.declinedTicket &&
+                  ticketDraft?.messageId !== message.response.message_id && (
+                    <div className="flex flex-wrap items-center gap-2 rounded-lg border border-accent-100 bg-accent-50 px-3 py-2">
+                      <span className="text-xs text-accent-700">
+                        Quer abrir um chamado para um analista do DP?
+                      </span>
+                      <button
+                        className="btn-primary text-xs"
+                        onClick={() => startTicketForm(message.response!.message_id)}
+                      >
+                        Sim, abrir chamado
+                      </button>
+                      <button
+                        className="btn-secondary text-xs"
+                        onClick={() => declineTicket(message.response!.message_id)}
+                      >
+                        Agora não
+                      </button>
+                    </div>
+                  )}
 
                 {message.declinedTicket && !message.response.ticket && (
                   <p className="text-xs text-slate-500">
                     Tudo bem! Se mudar de ideia, me pergunte de novo e eu ofereço o chamado.
                   </p>
+                )}
+
+                {ticketDraft && ticketDraft.messageId === message.response.message_id && (
+                  <div className="rounded-lg border border-accent-200 bg-accent-50 p-3 text-xs">
+                    {ticketDraft.step === "form" ? (
+                      <div className="space-y-2">
+                        <p className="font-semibold text-accent-800">Abrir chamado para o DP</p>
+                        <div className="grid grid-cols-2 gap-2">
+                          <label className="block">
+                            <span className="text-slate-500">Nome completo</span>
+                            <input
+                              value={user?.name ?? ""}
+                              readOnly
+                              className="mt-0.5 w-full rounded border border-slate-300 bg-slate-100 px-2 py-1"
+                            />
+                          </label>
+                          <label className="block">
+                            <span className="text-slate-500">Matrícula</span>
+                            <input
+                              value={user?.matricula ?? "—"}
+                              readOnly
+                              className="mt-0.5 w-full rounded border border-slate-300 bg-slate-100 px-2 py-1"
+                            />
+                          </label>
+                        </div>
+                        <label className="block">
+                          <span className="text-slate-500">Nicho do assunto (fila)</span>
+                          <select
+                            value={ticketDraft.departmentId}
+                            onChange={(e) => setTicketDraft({ ...ticketDraft, departmentId: e.target.value })}
+                            className="mt-0.5 w-full rounded border border-slate-300 px-2 py-1"
+                          >
+                            {departments.map((d) => (
+                              <option key={d.id} value={d.id}>
+                                {d.name}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label className="block">
+                          <span className="text-slate-500">Categoria (opcional)</span>
+                          <input
+                            value={ticketDraft.category}
+                            onChange={(e) => setTicketDraft({ ...ticketDraft, category: e.target.value })}
+                            placeholder="Ex.: Vale-refeição, ajuste de ponto..."
+                            className="mt-0.5 w-full rounded border border-slate-300 px-2 py-1"
+                          />
+                        </label>
+                        <label className="block">
+                          <span className="text-slate-500">Anexar arquivo (opcional)</span>
+                          <input
+                            type="file"
+                            multiple
+                            onChange={(e) =>
+                              setTicketDraft({ ...ticketDraft, files: Array.from(e.target.files ?? []) })
+                            }
+                            className="mt-0.5 block w-full text-xs"
+                          />
+                        </label>
+                        {ticketDraft.error && <p className="text-red-600">{ticketDraft.error}</p>}
+                        <div className="flex justify-end gap-2 pt-1">
+                          <button className="btn-secondary" onClick={cancelTicketDraft} type="button">
+                            Cancelar
+                          </button>
+                          <button
+                            className="btn-primary"
+                            onClick={requestTicketDraft}
+                            disabled={ticketDraft.loading || !ticketDraft.departmentId}
+                            type="button"
+                          >
+                            {ticketDraft.loading ? "Gerando resumo..." : "Continuar"}
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <p className="font-semibold text-accent-800">
+                          Aqui está o resumo que vamos enviar ao analista — confirme ou ajuste antes de abrir.
+                        </p>
+                        <label className="block">
+                          <span className="text-slate-500">Assunto</span>
+                          <input
+                            value={ticketDraft.subject}
+                            onChange={(e) => setTicketDraft({ ...ticketDraft, subject: e.target.value })}
+                            className="mt-0.5 w-full rounded border border-slate-300 px-2 py-1"
+                          />
+                        </label>
+                        <label className="block">
+                          <span className="text-slate-500">Descrição para o analista</span>
+                          <textarea
+                            value={ticketDraft.description}
+                            onChange={(e) => setTicketDraft({ ...ticketDraft, description: e.target.value })}
+                            rows={4}
+                            className="mt-0.5 w-full rounded border border-slate-300 px-2 py-1"
+                          />
+                        </label>
+                        {ticketDraft.error && <p className="text-red-600">{ticketDraft.error}</p>}
+                        <div className="flex justify-end gap-2 pt-1">
+                          <button
+                            className="btn-secondary"
+                            onClick={() => setTicketDraft({ ...ticketDraft, step: "form" })}
+                            type="button"
+                          >
+                            Voltar
+                          </button>
+                          <button
+                            className="btn-primary"
+                            onClick={confirmTicketOpening}
+                            disabled={ticketDraft.loading}
+                            type="button"
+                          >
+                            {ticketDraft.loading ? "Abrindo..." : "Está de acordo — abrir chamado"}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 )}
 
                 {message.response.ticket && (

@@ -68,6 +68,11 @@ locals {
     { name = "LOCAL_KNOWLEDGE_DEFAULT_DEPARTMENT_SLUG", value = var.local_knowledge_default_department_slug },
     { name = "GOOGLE_DRIVE_FOLDER_ID", value = var.google_drive_folder_id },
     { name = "GOOGLE_DRIVE_DEFAULT_DEPARTMENT_SLUG", value = var.google_drive_default_department_slug },
+    { name = "EMAIL_NOTIFICATIONS_ENABLED", value = tostring(var.email_notifications_enabled) },
+    { name = "SMTP_HOST", value = var.smtp_host },
+    { name = "SMTP_PORT", value = tostring(var.smtp_port) },
+    { name = "SMTP_USERNAME", value = var.smtp_username },
+    { name = "SMTP_FROM_EMAIL", value = var.smtp_from_email },
     { name = "CORS_ORIGINS", value = jsonencode([local.use_https ? "https://${var.domain_name}" : "http://${aws_lb.main.dns_name}"]) },
   ]
 
@@ -78,6 +83,7 @@ locals {
     { name = "ANTHROPIC_API_KEY", valueFrom = "${aws_secretsmanager_secret.app.arn}:ANTHROPIC_API_KEY::" },
     { name = "OPENAI_API_KEY", valueFrom = "${aws_secretsmanager_secret.app.arn}:OPENAI_API_KEY::" },
     { name = "GOOGLE_SERVICE_ACCOUNT_JSON", valueFrom = "${aws_secretsmanager_secret.app.arn}:GOOGLE_SERVICE_ACCOUNT_JSON::" },
+    { name = "SMTP_PASSWORD", valueFrom = "${aws_secretsmanager_secret.app.arn}:SMTP_PASSWORD::" },
   ]
 
   knowledge_base_mount_point = {

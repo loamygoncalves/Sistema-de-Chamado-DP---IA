@@ -22,5 +22,6 @@ resource "aws_secretsmanager_secret_version" "app" {
     ANTHROPIC_API_KEY   = var.anthropic_api_key
     OPENAI_API_KEY      = var.openai_api_key
     GOOGLE_SERVICE_ACCOUNT_JSON = var.google_service_account_json
+    SMTP_PASSWORD               = var.smtp_password
   })
 }

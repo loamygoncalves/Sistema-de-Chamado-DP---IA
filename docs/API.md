@@ -21,7 +21,8 @@ login e troca de token no backend). Todas as respostas de erro seguem
 | GET | `/chat/conversations/{id}` | Histórico de mensagens | employee+ (dono) |
 | POST | `/chat/conversations/{id}/messages` | Envia pergunta; retorna resposta da IA, score e fontes. **Nunca abre chamado sozinho** — `ticket` vem sempre `null`. As últimas `CHAT_HISTORY_MAX_MESSAGES` mensagens da conversa são enviadas como memória ao LLM, para que perguntas de acompanhamento façam sentido. `409` se a conversa já estiver encerrada | employee+ |
 | POST | `/chat/conversations/{id}/messages/{message_id}/feedback` | Registra se a resposta ajudou (`{"was_helpful": true|false}`). A pergunta é feita depois de **toda** resposta, inclusive as de alta confiança. `400` se a mensagem não for da IA | employee+ (dono) |
-| POST | `/chat/conversations/{id}/messages/{message_id}/open-ticket` | Cria o chamado somente após confirmação explícita do colaborador | employee+ (dono) |
+| POST | `/chat/conversations/{id}/messages/{message_id}/draft-ticket` | Pede à IA um resumo do contexto da conversa (`{"subject": "...", "description": "..."}`) para o colaborador revisar antes de confirmar — não cria nada, pode ser chamado quantas vezes precisar. Corpo: `{"department_id": "...", "category": "...", "subcategory": "..."}` | employee+ (dono) |
+| POST | `/chat/conversations/{id}/messages/{message_id}/open-ticket` | Cria o chamado somente após confirmação explícita do colaborador. Corpo: `{"department_id": "...", "category": "...", "subcategory": "...", "subject": "...", "description": "..."}` — `subject`/`description` normalmente vêm do rascunho de `draft-ticket` (editável pelo colaborador antes de enviar); vazios, cai no resumo automático de pergunta+resposta | employee+ (dono) |
 | POST | `/chat/conversations/{id}/close` | Encerra a conversa — a IA "esquece" o histórico dela; uma nova conversa (`POST /chat/conversations`) não carrega nenhuma memória desta | employee+ (dono) |
 
 Resposta de `POST /messages`:
@@ -61,17 +62,17 @@ não ajudou". O valor pode ser trocado (reenviar o `POST` sobrescreve).
 ## Tickets
 | Método | Rota | Descrição | Papéis |
 |---|---|---|---|
-| POST | `/tickets` | Abre chamado manualmente | employee+ |
-| GET | `/tickets` | Lista com filtros (`status`, `department_id`, `priority`, `assigned_to`, `mine`) | employee+ (escopo próprio) / analyst+ (fila) |
-| GET | `/tickets/{id}` | Detalhe + histórico da conversa, com nomes já resolvidos (`requester_name`, `requester_email`, `assigned_to_name`, `department_name`, e `actor_name` em cada evento). **Notas internas são omitidas quando quem consulta é o solicitante** | dono ou analyst+ |
-| POST | `/tickets/{id}/comments` | Adiciona mensagem à conversa. `{"comment": "...", "is_internal": false, "new_status": "aguardando_usuario"}` — `is_internal: true` grava **nota interna** (visível só a analyst+; a flag é ignorada se quem comenta é o solicitante); `new_status` muda o status na mesma ação (só analyst+, e **não** aceita `encerrado`) | dono ou analyst+ |
-| POST | `/tickets/{id}/attachments` | Upload de anexo | dono ou analyst+ |
+| POST | `/tickets` | Abre chamado manualmente. Dispara notificação por e-mail ao solicitante (evento `aberto`) | employee+ |
+| GET | `/tickets` | Lista com filtros (`status`, `department_id`, `assigned_to`, `mine`, `q`). `q` busca por protocolo, matrícula, assunto ou nome do solicitante (usado pela aba de busca e por "meus atendimentos", que passa `assigned_to=<id do analista logado>`) | employee+ (escopo próprio) / analyst+ (fila) |
+| GET | `/tickets/{id}` | Detalhe + histórico + anexos, com nomes já resolvidos (`requester_name`, `requester_email`, `assigned_to_name`, `department_name`, e `actor_name` em cada evento). **Notas internas são omitidas quando quem consulta é o solicitante** | dono ou analyst+ |
+| POST | `/tickets/{id}/comments` | Adiciona mensagem à conversa. `{"comment": "...", "is_internal": false, "new_status": "aguardando_usuario"}` — `is_internal: true` grava **nota interna** (visível só a analyst+; a flag é ignorada se quem comenta é o solicitante); `new_status` muda o status na mesma ação (só analyst+, e **não** aceita `encerrado`). Resposta pública de analyst+ dispara notificação por e-mail ao solicitante (evento `respondido`) | dono ou analyst+ |
+| POST | `/tickets/{id}/attachments` | Upload de anexo — persistido de verdade em armazenamento S3-compatível (MinIO local / S3 em produção, mesmas credenciais `S3_*`), não só os metadados | dono ou analyst+ |
 | POST | `/tickets/{id}/assume` | Analista assume o chamado | analyst+ |
 | POST | `/tickets/{id}/transfer` | Transfere para outro analista/fila | analyst+ |
 | PATCH | `/tickets/{id}/priority` | Altera prioridade (recalcula SLA) | analyst+ |
 | PATCH | `/tickets/{id}/status` | Altera status. **Não encerra**: `encerrado` retorna `400` — encerrar exige motivo e passa por `/close` | analyst+ |
 | GET | `/tickets/closure-reasons` | Motivos de encerramento que **este** usuário pode usar, com a mensagem padrão de cada um (o texto mora no backend, para não haver duas cópias) | employee+ |
-| POST | `/tickets/{id}/close` | Encerra o chamado. `{"reason": "...", "message": "..."}` — **`reason` é obrigatório** (`422` sem ele). `message` vazia usa a mensagem padrão do motivo. `409` se já estiver encerrado; `403` se o motivo não for permitido ao perfil. O aprendizado contínuo só dispara para `reason=resolvido` | dono (motivos do colaborador) ou analyst+ (motivos do DP) |
+| POST | `/tickets/{id}/close` | Encerra o chamado. `{"reason": "...", "message": "..."}` — **`reason` é obrigatório** (`422` sem ele). `message` vazia usa a mensagem padrão do motivo. `409` se já estiver encerrado; `403` se o motivo não for permitido ao perfil. Dispara notificação por e-mail ao solicitante (evento `finalizado`). O aprendizado contínuo só dispara para `reason=resolvido` | dono (motivos do colaborador) ou analyst+ (motivos do DP) |
 | POST | `/tickets/{id}/rating` | Colaborador avalia atendimento (1-5) | dono |
 
 ## Base de conhecimento

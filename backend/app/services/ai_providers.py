@@ -54,6 +54,9 @@ class LLMProvider(ABC):
     @abstractmethod
     async def summarize_ticket(self, *, subject: str, description: str, resolution_history: str) -> dict: ...
 
+    @abstractmethod
+    async def draft_ticket(self, *, history: list[dict], category: str | None, subcategory: str | None) -> dict: ...
+
 
 def _build_context_prompt(question: str, context_blocks: list[dict]) -> str:
     context_text = "\n\n".join(
@@ -61,6 +64,21 @@ def _build_context_prompt(question: str, context_blocks: list[dict]) -> str:
         for block in context_blocks
     )
     return f"CONTEXTO:\n{context_text}\n\nPERGUNTA DO COLABORADOR:\n{question}"
+
+
+def _build_draft_ticket_prompt(history: list[dict], category: str | None, subcategory: str | None) -> str:
+    conversation = "\n".join(f"{turn['role']}: {turn['content']}" for turn in history)
+    niche = " / ".join(part for part in [category, subcategory] if part) or "não informado"
+    return (
+        "Você vai preparar o resumo de um chamado que um colaborador está prestes a abrir para o "
+        "Departamento Pessoal, a partir da conversa abaixo com a IA. O objetivo é dar ao analista humano "
+        "o contexto já organizado — o que foi perguntado, o que a IA já verificou ou não conseguiu "
+        "confirmar, e o que falta esclarecer — para ele não ter que reler a conversa inteira.\n\n"
+        f"Nicho do assunto escolhido pelo colaborador: {niche}\n\n"
+        f"CONVERSA:\n{conversation}\n\n"
+        'Responda em JSON estrito: {"subject": "título curto e específico do chamado, até 100 caracteres", '
+        '"description": "resumo objetivo em português, 2-4 frases, escrito para o analista"}'
+    )
 
 
 def _parse_json_response(raw: str) -> dict:
@@ -107,6 +125,14 @@ class AnthropicProvider(LLMProvider):
         )
         message = await self._client.messages.create(
             model=self._model, max_tokens=1024, messages=[{"role": "user", "content": prompt}]
+        )
+        return _parse_json_response(message.content[0].text)
+
+    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=1, max=8))
+    async def draft_ticket(self, *, history: list[dict], category: str | None, subcategory: str | None) -> dict:
+        prompt = _build_draft_ticket_prompt(history, category, subcategory)
+        message = await self._client.messages.create(
+            model=self._model, max_tokens=512, messages=[{"role": "user", "content": prompt}]
         )
         return _parse_json_response(message.content[0].text)
 
@@ -159,6 +185,16 @@ class OpenAIProvider(LLMProvider):
             'Responda em JSON: {"summary": "...", "root_cause": "...", "solution": "...", '
             '"article_title": "...", "article_content": "...", "tags": ["..."]}'
         )
+        completion = await self._client.chat.completions.create(
+            model=self._model,
+            response_format={"type": "json_object"},
+            messages=[{"role": "user", "content": prompt}],
+        )
+        return _parse_json_response(completion.choices[0].message.content)
+
+    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=1, max=8))
+    async def draft_ticket(self, *, history: list[dict], category: str | None, subcategory: str | None) -> dict:
+        prompt = _build_draft_ticket_prompt(history, category, subcategory)
         completion = await self._client.chat.completions.create(
             model=self._model,
             response_format={"type": "json_object"},

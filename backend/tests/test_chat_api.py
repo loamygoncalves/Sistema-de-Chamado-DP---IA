@@ -90,8 +90,8 @@ async def test_low_confidence_ticket_opens_only_after_explicit_confirmation(
         message_id = response.json()["message_id"]
 
         confirm = await employee_client.post(
-            f"/api/v1/chat/conversations/{conversation_id}/messages/{message_id}/open-ticket"
-            f"?department_id={department.id}"
+            f"/api/v1/chat/conversations/{conversation_id}/messages/{message_id}/open-ticket",
+            json={"department_id": str(department.id)},
         )
         assert confirm.status_code == 200
         assert confirm.json()["ticket_number"].startswith("BEEP-")
@@ -245,8 +245,8 @@ async def test_negative_feedback_is_recorded_and_ticket_can_then_be_opened(
     # Dizer que não ajudou é o que leva à oferta de chamado — mas o chamado
     # em si continua só nascendo da confirmação explícita.
     ticket = await employee_client.post(
-        f"/api/v1/chat/conversations/{asked['conversation_id']}/messages/{asked['message_id']}"
-        f"/open-ticket?department_id={department.id}"
+        f"/api/v1/chat/conversations/{asked['conversation_id']}/messages/{asked['message_id']}/open-ticket",
+        json={"department_id": str(department.id)},
     )
     assert ticket.status_code == 200
     assert ticket.json()["ticket_number"].startswith("BEEP-")

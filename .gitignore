@@ -42,3 +42,6 @@ infra/knowledge-base/*
 .terraform.lock.hcl
 terraform.tfvars
 !terraform.tfvars.example
+
+# Redis local (dev)
+dump.rdb

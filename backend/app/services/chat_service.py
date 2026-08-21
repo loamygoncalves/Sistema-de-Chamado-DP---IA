@@ -175,18 +175,41 @@ def _ticket_source_for_confidence(confidence_score, threshold_suggest: float) ->
     return TicketSource.IA_AUTOMATICO
 
 
+async def draft_ticket_context(
+    db: AsyncSession, *, conversation_id: uuid.UUID, category: str | None, subcategory: str | None
+) -> dict:
+    """Pede à IA um resumo do contexto do chamado a partir da conversa
+    inteira — para o colaborador revisar/editar antes de confirmar a
+    abertura, e para o analista não precisar reler a conversa do zero."""
+    history = await _recent_history(db, conversation_id)
+    provider = get_llm_provider()
+    return await provider.draft_ticket(history=history, category=category, subcategory=subcategory)
+
+
 async def open_ticket_from_suggestion(
-    db: AsyncSession, *, user: User, message: ChatMessage, department_id: uuid.UUID
+    db: AsyncSession,
+    *,
+    user: User,
+    message: ChatMessage,
+    department_id: uuid.UUID,
+    category: str | None = None,
+    subcategory: str | None = None,
+    subject: str | None = None,
+    description: str | None = None,
 ) -> "Ticket":  # noqa: F821
     conversation_id = message.conversation_id
-    question_msg_result = await db.execute(
-        select(ChatMessage)
-        .where(ChatMessage.conversation_id == conversation_id, ChatMessage.role == ChatRole.USER)
-        .order_by(ChatMessage.created_at.desc())
-        .limit(1)
-    )
-    question_msg = question_msg_result.scalar_one_or_none()
-    subject = question_msg.content[:255] if question_msg else message.content[:255]
+
+    if not subject or not description:
+        question_msg_result = await db.execute(
+            select(ChatMessage)
+            .where(ChatMessage.conversation_id == conversation_id, ChatMessage.role == ChatRole.USER)
+            .order_by(ChatMessage.created_at.desc())
+            .limit(1)
+        )
+        question_msg = question_msg_result.scalar_one_or_none()
+        fallback_subject = question_msg.content[:255] if question_msg else message.content[:255]
+        subject = subject or fallback_subject
+        description = description or f"Pergunta: {fallback_subject}\n\nResposta da IA:\n{message.content}"
 
     ai_settings = await get_ai_settings(db)
     source = _ticket_source_for_confidence(message.confidence_score, float(ai_settings["confidence_threshold_suggest"]))
@@ -195,8 +218,10 @@ async def open_ticket_from_suggestion(
         db,
         requester=user,
         department_id=department_id,
-        subject=subject,
-        description=f"Pergunta: {subject}\n\nResposta da IA:\n{message.content}",
+        subject=subject[:255],
+        description=description,
+        category=category,
+        subcategory=subcategory,
         source=source,
         origin_conversation_id=conversation_id,
     )

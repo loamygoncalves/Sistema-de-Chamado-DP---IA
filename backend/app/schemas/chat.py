@@ -55,6 +55,28 @@ class MessageFeedback(BaseModel):
     was_helpful: bool
 
 
+class DraftTicketRequest(BaseModel):
+    department_id: uuid.UUID
+    category: str | None = None
+    subcategory: str | None = None
+
+
+class DraftTicketResponse(BaseModel):
+    subject: str
+    description: str
+
+
+class OpenTicketFromChat(BaseModel):
+    department_id: uuid.UUID
+    category: str | None = None
+    subcategory: str | None = None
+    # Preenchidos com o rascunho gerado por `draft-ticket` — o colaborador
+    # pode editar antes de confirmar. Vazios, cai no resumo automático de
+    # pergunta+resposta (comportamento anterior, sem passar pelo rascunho).
+    subject: str | None = None
+    description: str | None = None
+
+
 class MessageRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

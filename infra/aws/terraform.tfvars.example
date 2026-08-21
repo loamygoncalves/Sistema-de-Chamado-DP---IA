@@ -24,6 +24,12 @@ bedrock_model_id = ""
 # google_drive_folder_id      = ""
 # google_service_account_json = ""
 
+# Notificação por e-mail (opcional) — chamado aberto/respondido/finalizado
+# email_notifications_enabled = true
+# smtp_host                   = ""
+# smtp_username               = ""
+# smtp_password               = ""
+
 # SSO corporativo real da Beep (Azure AD ou Keycloak já existente) — este
 # Terraform não cria um Keycloak novo.
 auth_provider      = "azure_ad"

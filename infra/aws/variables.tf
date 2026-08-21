@@ -264,3 +264,39 @@ variable "google_drive_default_department_slug" {
   type    = string
   default = ""
 }
+
+# ---------------------------------------------------------------------------
+# Notificação por e-mail (chamado aberto/respondido/finalizado) — deixe
+# email_notifications_enabled em false para manter desativado.
+# ---------------------------------------------------------------------------
+
+variable "email_notifications_enabled" {
+  type    = bool
+  default = false
+}
+
+variable "smtp_host" {
+  type    = string
+  default = ""
+}
+
+variable "smtp_port" {
+  type    = number
+  default = 587
+}
+
+variable "smtp_username" {
+  type    = string
+  default = ""
+}
+
+variable "smtp_password" {
+  type      = string
+  default   = ""
+  sensitive = true
+}
+
+variable "smtp_from_email" {
+  type    = string
+  default = "dp@beepsaude.com.br"
+}

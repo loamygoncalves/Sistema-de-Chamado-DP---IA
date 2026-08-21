@@ -12,10 +12,13 @@ from app.models.user import User
 from app.schemas.chat import (
     ConversationCreate,
     ConversationRead,
+    DraftTicketRequest,
+    DraftTicketResponse,
     MessageCreate,
     MessageFeedback,
     MessageRead,
     MessageResponse,
+    OpenTicketFromChat,
     SourceRef,
     TicketRef,
 )
@@ -23,8 +26,10 @@ from app.services.chat_service import (
     ConversationClosedError,
     ask_question,
     close_conversation,
+    draft_ticket_context,
     open_ticket_from_suggestion,
 )
+from app.workers.tasks import send_ticket_email_task
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
@@ -135,11 +140,30 @@ async def rate_answer(
     return message
 
 
+@router.post("/conversations/{conversation_id}/messages/{message_id}/draft-ticket", response_model=DraftTicketResponse)
+async def draft_ticket(
+    conversation_id: uuid.UUID,
+    message_id: uuid.UUID,
+    payload: DraftTicketRequest,
+    user: User = Depends(require_employee),
+    db: AsyncSession = Depends(get_db),
+):
+    """Pede à IA um resumo do contexto da conversa para o analista — o
+    colaborador revisa e pode editar antes de confirmar a abertura via
+    `open-ticket`. Não cria nada; pode ser chamado quantas vezes precisar."""
+    await _get_owned_conversation(db, conversation_id, user)
+    await _get_owned_message(db, conversation_id, message_id)
+    draft = await draft_ticket_context(
+        db, conversation_id=conversation_id, category=payload.category, subcategory=payload.subcategory
+    )
+    return DraftTicketResponse(subject=draft["subject"], description=draft["description"])
+
+
 @router.post("/conversations/{conversation_id}/messages/{message_id}/open-ticket", response_model=TicketRef)
 async def open_ticket(
     conversation_id: uuid.UUID,
     message_id: uuid.UUID,
-    department_id: uuid.UUID,
+    payload: OpenTicketFromChat,
     user: User = Depends(require_employee),
     db: AsyncSession = Depends(get_db),
 ):
@@ -148,6 +172,16 @@ async def open_ticket(
     if message.resulted_ticket_id:
         raise HTTPException(status.HTTP_409_CONFLICT, "Esta mensagem já gerou um chamado")
 
-    ticket = await open_ticket_from_suggestion(db, user=user, message=message, department_id=department_id)
+    ticket = await open_ticket_from_suggestion(
+        db,
+        user=user,
+        message=message,
+        department_id=payload.department_id,
+        category=payload.category,
+        subcategory=payload.subcategory,
+        subject=payload.subject,
+        description=payload.description,
+    )
     await db.commit()
+    send_ticket_email_task.delay(str(ticket.id), "aberto")
     return _ticket_ref(ticket)

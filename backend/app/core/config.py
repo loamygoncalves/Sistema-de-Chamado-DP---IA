@@ -85,6 +85,18 @@ class Settings(BaseSettings):
     GOOGLE_SERVICE_ACCOUNT_JSON: str | None = None  # conteúdo JSON da chave da service account (não o caminho)
     GOOGLE_DRIVE_DEFAULT_DEPARTMENT_SLUG: str | None = None
 
+    # Notificação por e-mail quando um chamado é aberto, respondido
+    # publicamente por um analista, ou finalizado. Deixe
+    # EMAIL_NOTIFICATIONS_ENABLED em false (padrão) para desativar — nesse
+    # caso o envio é pulado silenciosamente, sem erro.
+    EMAIL_NOTIFICATIONS_ENABLED: bool = False
+    SMTP_HOST: str | None = None
+    SMTP_PORT: int = 587
+    SMTP_USERNAME: str | None = None
+    SMTP_PASSWORD: str | None = None
+    SMTP_USE_TLS: bool = True
+    SMTP_FROM_EMAIL: str = "dp@beepsaude.com.br"
+
     CORS_ORIGINS: list[str] = ["http://localhost:3000"]
 
 
