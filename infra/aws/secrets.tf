@@ -21,5 +21,6 @@ resource "aws_secretsmanager_secret_version" "app" {
     OIDC_CLIENT_SECRET  = var.oidc_client_secret
     ANTHROPIC_API_KEY   = var.anthropic_api_key
     OPENAI_API_KEY      = var.openai_api_key
+    GOOGLE_SERVICE_ACCOUNT_JSON = var.google_service_account_json
   })
 }

@@ -1,0 +1,27 @@
+CATEGORIA: PONTO
+Área responsável: Departamento Pessoal — Ponto e Frequência
+
+RESUMO
+Ajuste de marcação de ponto, abono de falta por atestado, mudança de escala/plantão.
+
+CAUSAS MAIS COMUNS
+- Marcação esquecida ou feita por engano
+- Mudança de escala/plantão ainda não formalizada pela gestão direta
+- Atestado médico ainda não processado como abono
+
+O QUE VERIFICAR ANTES DE RESPONDER
+- Qual data/horário da marcação a corrigir, e qual o motivo?
+- Se envolve atestado: ele já foi enviado pelo canal correto (Pipefy)?
+- Se envolve mudança de escala: a gestão direta já formalizou a alteração?
+
+COMO ORIENTAR O COLABORADOR
+Ajustar diretamente marcações pontuais quando o pedido é claro. Para atestados, direcionar ao envio pelo portal Pipefy. Para mudança de escala, explicar que depende de formalização prévia da gestão direta antes do DP conseguir refletir no sistema de ponto.
+
+PERGUNTAS FREQUENTES
+P: Como envio meu atestado médico para abonar uma falta?
+R: Documentos para abono de falta devem ser enviados pelo portal Pipefy, preenchendo todas as informações solicitadas no formulário de envio de documentação.
+
+P: Mudei de plantão/escala, preciso ajustar algo no ponto?
+R: Sim — mas antes o DP precisa receber a formalização da mudança pela sua gestão direta. Só depois disso o ajuste pode ser refletido na sua folha de ponto.
+
+(Base construída a partir do histórico de 61 chamados desta categoria no TomTicket, com dados pessoais removidos.)

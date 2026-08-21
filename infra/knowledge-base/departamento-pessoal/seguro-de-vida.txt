@@ -1,0 +1,16 @@
+CATEGORIA: SEGURO DE VIDA
+Área responsável: Departamento Pessoal — Benefícios
+
+RESUMO
+Alteração de beneficiário do seguro de vida.
+
+CAUSAS MAIS COMUNS
+- Necessidade de atualizar o beneficiário cadastrado
+
+O QUE VERIFICAR ANTES DE RESPONDER
+- O formulário específico de seguro de vida foi preenchido?
+
+COMO ORIENTAR O COLABORADOR
+Solicitar o preenchimento do formulário específico de seguro de vida para registrar a alteração de beneficiário.
+
+(Base construída a partir do histórico de 1 chamados desta categoria no TomTicket, com dados pessoais removidos.)

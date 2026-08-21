@@ -22,9 +22,10 @@ from app.core.config import settings
 from app.models.chat import ChatConversation, ChatMessage
 from app.models.enums import ChatConversationStatus, ChatDecision, ChatRole, TicketSource
 from app.models.user import User
-from app.services import local_folder_sync_service
+from app.services import drive_sync_service, local_folder_sync_service
 from app.services.ai_providers import get_llm_provider
 from app.services.ai_settings_service import get_ai_settings
+from app.services.drive_sync_service import DriveSyncNotConfigured
 from app.services.embeddings import embedding_service
 from app.services.local_folder_sync_service import LocalSyncNotConfigured
 from app.services.ticket_service import create_ticket
@@ -78,6 +79,15 @@ async def ask_question(
         pass
     except Exception:  # noqa: BLE001 — uma falha de sincronização não pode impedir a resposta
         logger.warning("Falha ao sincronizar a pasta de conhecimento local", exc_info=True)
+
+    # Mesma lógica para a pasta do Google Drive, quando configurada — as duas
+    # fontes coexistem (dá pra usar só uma, ou as duas ao mesmo tempo).
+    try:
+        await drive_sync_service.sync_drive_folder(db)
+    except DriveSyncNotConfigured:
+        pass
+    except Exception:  # noqa: BLE001 — uma falha de sincronização não pode impedir a resposta
+        logger.warning("Falha ao sincronizar a pasta do Google Drive", exc_info=True)
 
     ai_settings = await get_ai_settings(db)
     top_k = int(ai_settings["rag_top_k"])

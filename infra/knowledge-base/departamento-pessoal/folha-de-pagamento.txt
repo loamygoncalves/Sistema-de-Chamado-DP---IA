@@ -1,0 +1,24 @@
+CATEGORIA: FOLHA DE PAGAMENTO
+Área responsável: Departamento Pessoal — Folha de Pagamento
+
+RESUMO
+Dúvidas sobre valor recebido, descontos considerados indevidos, adicional noturno, 13º salário, descontos de pensão ou plano.
+
+CAUSAS MAIS COMUNS
+- Eventos exibidos separados na folha (ex.: atestado, adicional) que somados batem com o salário contratual
+- Defasagem de competência: a folha do mês reflete o ponto apurado no mês anterior
+- Erro genuíno de lançamento (menos comum, mas ocorre)
+
+O QUE VERIFICAR ANTES DE RESPONDER
+- O colaborador está olhando o contracheque completo, com todos os eventos, ou só o valor líquido final?
+- Houve falta, atestado ou afastamento no período de apuração que justifique o desconto/evento separado?
+- Qual competência (mês) está sendo questionada, e ela bate com o período de apuração correto?
+
+COMO ORIENTAR O COLABORADOR
+Explicar a composição de eventos com números concretos do contracheque, deixando claro que o salário contratual está preservado quando os eventos somados batem com ele. Explicar a defasagem entre o mês do ponto e o mês do pagamento quando aplicável. Quando é erro real, corrigir e informar em qual competência a correção será refletida.
+
+PERGUNTAS FREQUENTES
+P: Meu salário veio menor do que o esperado, é um erro?
+R: Nem sempre — muitas vezes o salário aparece dividido em eventos separados no contracheque (por exemplo, salário base + evento de atestado), que juntos totalizam o valor contratual. Confira o contracheque completo, não só o valor líquido. Se a soma dos eventos não bater com o esperado, é necessário abrir chamado para o DP investigar.
+
+(Base construída a partir do histórico de 112 chamados desta categoria no TomTicket, com dados pessoais removidos.)

@@ -9,8 +9,17 @@ from app.db.session import get_db
 from app.models.enums import DocumentType
 from app.models.knowledge import FAQ, Document, KnowledgeArticle
 from app.models.user import User
-from app.schemas.knowledge import ArticleCreate, ArticleRead, DocumentRead, FAQCreate, FAQRead, LocalSyncResult
-from app.services import knowledge_service, local_folder_sync_service
+from app.schemas.knowledge import (
+    ArticleCreate,
+    ArticleRead,
+    DocumentRead,
+    DriveSyncResult,
+    FAQCreate,
+    FAQRead,
+    LocalSyncResult,
+)
+from app.services import drive_sync_service, knowledge_service, local_folder_sync_service
+from app.services.drive_sync_service import DriveSyncNotConfigured
 from app.services.local_folder_sync_service import LocalSyncNotConfigured
 
 router = APIRouter(prefix="/knowledge", tags=["knowledge"])
@@ -90,6 +99,26 @@ async def sync_local_documents(admin: User = Depends(require_admin), db: AsyncSe
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
     await db.commit()
     return LocalSyncResult(
+        created=result.created,
+        updated=result.updated,
+        skipped_unchanged=result.skipped_unchanged,
+        skipped_unsupported=result.skipped_unsupported,
+        errors=result.errors,
+    )
+
+
+@router.post("/documents/sync-drive", response_model=DriveSyncResult)
+async def sync_drive_documents(admin: User = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+    """Dispara sob demanda a sincronização com a pasta do Google Drive
+    configurada (`GOOGLE_DRIVE_FOLDER_ID` + `GOOGLE_SERVICE_ACCOUNT_JSON`,
+    ver `docs/GOOGLE_DRIVE_SETUP.md`). A mesma sincronização também roda
+    automaticamente no início de cada resposta da IA."""
+    try:
+        result = await drive_sync_service.sync_drive_folder(db)
+    except DriveSyncNotConfigured as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
+    await db.commit()
+    return DriveSyncResult(
         created=result.created,
         updated=result.updated,
         skipped_unchanged=result.skipped_unchanged,

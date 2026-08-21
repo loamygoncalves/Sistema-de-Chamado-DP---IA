@@ -85,6 +85,16 @@ manualmente pelo painel. Configuração via `LOCAL_KNOWLEDGE_FOLDER` (ver
 Passo a passo completo para habilitar (montar a pasta de rede localmente ou
 no Kubernetes): `docs/LOCAL_KNOWLEDGE_SETUP.md`.
 
+Alternativa (ou complemento) quando não existe uma pasta de rede real, mas o
+conteúdo já mora numa pasta do Google Drive: sincronização direto pela API do
+Drive via service account, sem depender do computador de ninguém — passo a
+passo em `docs/GOOGLE_DRIVE_SETUP.md`.
+
+A base de conhecimento já vem com 25 arquivos derivados da análise do
+histórico de chamados do TomTicket (`infra/knowledge-base/departamento-pessoal/`),
+prontos para uso — ver `docs/TOMTICKET_KNOWLEDGE_BASE.md` para a metodologia
+completa (relatório, taxonomia, árvores de decisão e FAQs).
+
 ## Deploy em produção
 
 - **AWS (ECS Fargate)**: Terraform pronto em `infra/aws/` — VPC, RDS,

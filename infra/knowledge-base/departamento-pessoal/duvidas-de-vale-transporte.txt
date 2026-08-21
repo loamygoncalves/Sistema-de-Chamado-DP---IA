@@ -1,0 +1,29 @@
+CATEGORIA: DÚVIDAS DE VALE TRANSPORTE
+Área responsável: Departamento Pessoal — Benefícios (Vale Transporte)
+
+RESUMO
+Recarga do VT mensal não realizada ou com valor divergente, cartão sem integração entre modais, cartão cancelado.
+
+CAUSAS MAIS COMUNS
+- Recarga programada para a competência seguinte por ter sido solicitada após a data de corte (dia 15)
+- Integração entre modais (ônibus/metrô/trem) pendente de ativação (até 48h úteis)
+- Desconto no valor por falta, atestado ou dias de banco de horas no período apurado
+- Erro genuíno de cadastro junto à operadora (Jaé, RioCard, Top, Bilhete Único)
+
+O QUE VERIFICAR ANTES DE RESPONDER
+- Qual operadora/cartão o colaborador usa (Jaé, RioCard, Top, Bilhete Único)?
+- Data e valor da última recarga comparados ao esperado?
+- Houve falta, atestado, férias ou banco de horas no período que afeta o cálculo?
+- O pedido de alteração/integração foi feito antes ou depois do corte do dia 15?
+
+COMO ORIENTAR O COLABORADOR
+Explicar a regra de corte/competência quando o valor está programado para o mês seguinte; orientar aguardar até 48h úteis para integração entre modais; abrir tratativa formal com a operadora quando o erro é genuíno, e só pedir dados bancários do colaborador quando envolver reembolso de diferença por falha da operadora.
+
+PERGUNTAS FREQUENTES
+P: Meu vale transporte não caiu esse mês, o que houve?
+R: Confira se a solicitação foi feita antes do dia 15 (data de corte) — pedidos depois disso entram na recarga do mês seguinte. Se o pedido foi feito a tempo e mesmo assim não caiu, é preciso abrir chamado para o DP investigar com a operadora.
+
+P: Meu cartão não está integrando entre ônibus e metrô, o que fazer?
+R: Após a ativação da integração, aguarde até 48 horas úteis e tente novamente encostando o cartão em qualquer meio de transporte, ou use um Validador/Terminal de Consulta da operadora para ativação imediata.
+
+(Base construída a partir do histórico de 209 chamados desta categoria no TomTicket, com dados pessoais removidos.)

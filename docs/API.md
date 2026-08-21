@@ -84,6 +84,7 @@ não ajudou". O valor pode ser trocado (reenviar o `POST` sobrescreve).
 | POST | `/knowledge/documents` | Upload de documento (PDF/DOCX/XLSX/CSV/PPTX/TXT) para ingestão | admin |
 | GET | `/knowledge/documents/{id}` | Status de indexação | admin |
 | POST | `/knowledge/documents/sync-local` | Dispara sob demanda a sincronização com a pasta local/de rede configurada (`LOCAL_KNOWLEDGE_FOLDER`). Retorna `{created, updated, skipped_unchanged, skipped_unsupported, errors}` (caminhos dos arquivos em cada lista, relativos à pasta). `400` se `LOCAL_KNOWLEDGE_FOLDER` não estiver configurado ou não existir | admin |
+| POST | `/knowledge/documents/sync-drive` | Dispara sob demanda a sincronização com a pasta do Google Drive configurada (`GOOGLE_DRIVE_FOLDER_ID` + `GOOGLE_SERVICE_ACCOUNT_JSON`, ver `docs/GOOGLE_DRIVE_SETUP.md`). Mesmo formato de resposta do `sync-local`. `400` se não configurado ou se a pasta não tiver sido compartilhada com a service account | admin |
 
 A mesma sincronização também roda automaticamente no início de cada resposta
 da IA (`POST /chat/conversations/{id}/messages`) — ver `docs/ARCHITECTURE.md`.

@@ -1,0 +1,18 @@
+CATEGORIA: CONVÊNIOS E PARCERIAS
+Área responsável: Departamento Pessoal — Benefícios
+
+RESUMO
+Dúvidas sobre a rede credenciada dos planos e outras parcerias da empresa (ex.: conta salário).
+
+CAUSAS MAIS COMUNS
+- Dificuldade em achar prestador credenciado numa região específica
+- Necessidade de comprovar vínculo empregatício para benefícios de parceiros externos (ex.: banco)
+
+O QUE VERIFICAR ANTES DE RESPONDER
+- Qual convênio/parceria e qual a dúvida específica?
+- Se envolve um parceiro externo, quais dados da empresa ele está pedindo (CNPJ, comprovante de vínculo)?
+
+COMO ORIENTAR O COLABORADOR
+Para rede credenciada, orientar contato direto com a central da operadora informando região e tipo de exame/atendimento. Para parcerias externas (bancos, etc.), fornecer os dados institucionais necessários (como CNPJ) e orientar que a negociação final é direta com o parceiro.
+
+(Base construída a partir do histórico de 30 chamados desta categoria no TomTicket, com dados pessoais removidos.)

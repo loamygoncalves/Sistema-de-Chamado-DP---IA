@@ -1,0 +1,24 @@
+CATEGORIA: VALE ALIMENTAÇÃO
+Área responsável: Departamento Pessoal — Benefícios (VR/VA)
+
+RESUMO
+Troca de percentual entre Vale Alimentação e Vale Refeição, valor creditado divergente, cartão não recebido.
+
+CAUSAS MAIS COMUNS
+- Escala/cargo desatualizado no sistema no momento do cálculo do benefício
+- Regras de composição do benefício por função (ex.: motoristas não podem ter 100% em VA)
+- Pedido de troca de percentual feito após o corte, valendo só na competência seguinte
+
+O QUE VERIFICAR ANTES DE RESPONDER
+- Qual é a escala/cargo atual do colaborador no sistema, e ele está atualizado?
+- A função do colaborador tem alguma restrição de composição VR/VA (ex.: função externa)?
+- O pedido de troca foi feito antes ou depois do corte do mês?
+
+COMO ORIENTAR O COLABORADOR
+Atualizar a escala/cargo no sistema quando estiver desatualizado e recalcular o benefício. Explicar restrições de composição por função quando aplicável. Confirmar que a troca de percentual só vale a partir da competência seguinte.
+
+PERGUNTAS FREQUENTES
+P: Posso receber 100% do meu benefício em Vale Alimentação?
+R: Depende da sua função. Para funções com rotina externa (como motoristas), parte do benefício precisa permanecer em Vale Refeição para custear as refeições durante a jornada. Para as demais funções, a troca de percentual pode ser solicitada por chamado e vale a partir da competência seguinte ao pedido.
+
+(Base construída a partir do histórico de 77 chamados desta categoria no TomTicket, com dados pessoais removidos.)

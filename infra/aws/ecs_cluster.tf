@@ -66,6 +66,8 @@ locals {
     { name = "S3_BUCKET", value = aws_s3_bucket.storage.bucket },
     { name = "LOCAL_KNOWLEDGE_FOLDER", value = "/data/knowledge-base" },
     { name = "LOCAL_KNOWLEDGE_DEFAULT_DEPARTMENT_SLUG", value = var.local_knowledge_default_department_slug },
+    { name = "GOOGLE_DRIVE_FOLDER_ID", value = var.google_drive_folder_id },
+    { name = "GOOGLE_DRIVE_DEFAULT_DEPARTMENT_SLUG", value = var.google_drive_default_department_slug },
     { name = "CORS_ORIGINS", value = jsonencode([local.use_https ? "https://${var.domain_name}" : "http://${aws_lb.main.dns_name}"]) },
   ]
 
@@ -75,6 +77,7 @@ locals {
     { name = "OIDC_CLIENT_SECRET", valueFrom = "${aws_secretsmanager_secret.app.arn}:OIDC_CLIENT_SECRET::" },
     { name = "ANTHROPIC_API_KEY", valueFrom = "${aws_secretsmanager_secret.app.arn}:ANTHROPIC_API_KEY::" },
     { name = "OPENAI_API_KEY", valueFrom = "${aws_secretsmanager_secret.app.arn}:OPENAI_API_KEY::" },
+    { name = "GOOGLE_SERVICE_ACCOUNT_JSON", valueFrom = "${aws_secretsmanager_secret.app.arn}:GOOGLE_SERVICE_ACCOUNT_JSON::" },
   ]
 
   knowledge_base_mount_point = {

@@ -1,0 +1,20 @@
+CATEGORIA: RENÚNCIA DE VALE TRANSPORTE
+Área responsável: Departamento Pessoal — Benefícios (Vale Transporte)
+
+RESUMO
+Pedido de cancelamento do vale transporte, geralmente por passar a usar transporte próprio.
+
+CAUSAS MAIS COMUNS
+- Colaborador passou a usar carro/moto próprios ou já não utiliza o benefício
+
+O QUE VERIFICAR ANTES DE RESPONDER
+- O pedido foi feito antes ou depois do corte do dia 15 do mês?
+
+COMO ORIENTAR O COLABORADOR
+Confirmar a renúncia, deixando claro que ela só é aplicada a partir da competência seguinte se solicitada após o corte, e que o desconto de VT para de ocorrer a partir da folha da competência em que a renúncia já estiver processada.
+
+PERGUNTAS FREQUENTES
+P: Quero cancelar meu vale transporte, quando o desconto para?
+R: A renúncia é processada a partir da competência seguinte ao pedido (respeitando o corte do dia 15). O desconto de VT deixa de ocorrer a partir da folha da competência em que a renúncia já estiver registrada.
+
+(Base construída a partir do histórico de 61 chamados desta categoria no TomTicket, com dados pessoais removidos.)

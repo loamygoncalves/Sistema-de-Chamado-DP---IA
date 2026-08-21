@@ -60,3 +60,11 @@ class LocalSyncResult(BaseModel):
     skipped_unchanged: list[str]
     skipped_unsupported: list[str]
     errors: list[str]
+
+
+class DriveSyncResult(BaseModel):
+    created: list[str]
+    updated: list[str]
+    skipped_unchanged: list[str]
+    skipped_unsupported: list[str]
+    errors: list[str]

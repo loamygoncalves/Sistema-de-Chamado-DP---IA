@@ -1,0 +1,25 @@
+CATEGORIA: VALE REFEIÇÃO
+Área responsável: Departamento Pessoal — Benefícios (VR/VA)
+
+RESUMO
+Segunda via do cartão, cartão não recebido, valor creditado menor que o esperado, troca entre VR e VA.
+
+CAUSAS MAIS COMUNS
+- Valor proporcional por férias, admissão no meio do mês, ou mudança de escala
+- Mudança de cargo/escala comunicada ao DP depois do fechamento da folha do mês
+- Cartão em trânsito (entrega via Correios, rastreável)
+- Pedido de troca/alteração feito após a data de corte (dia 15), valendo só na competência seguinte
+
+O QUE VERIFICAR ANTES DE RESPONDER
+- Houve férias, afastamento ou mudança de escala/cargo no mês em questão?
+- Se houve mudança de cargo, quando ela foi formalizada pela gestão e recebida pelo DP?
+- O pedido de troca ou 2ª via foi feito antes ou depois do corte do dia 15?
+
+COMO ORIENTAR O COLABORADOR
+Explicar o cálculo proporcional com números (dias trabalhados × valor diário). Para 2ª via, orientar solicitação direto no app da operadora (Ticket). Para valor incorreto por mudança de cargo tardia, explicar que a correção vale a partir da competência seguinte ao recebimento da formalização.
+
+PERGUNTAS FREQUENTES
+P: Como peço a segunda via do cartão de vale-refeição?
+R: A solicitação de 2ª via deve ser feita diretamente pelo aplicativo da operadora (Ticket), na opção "Pedir 2ª via". O prazo de entrega é de até 7 dias úteis no seu hub. O saldo do cartão provisório não é transferido automaticamente para o cartão definitivo.
+
+(Base construída a partir do histórico de 94 chamados desta categoria no TomTicket, com dados pessoais removidos.)

@@ -1,0 +1,28 @@
+CATEGORIA: AUXILIO CRECHE
+Área responsável: Departamento Pessoal — Benefícios
+
+RESUMO
+Comprovação mensal do valor pago à creche/cuidadora para reembolso do auxílio, e dúvidas sobre elegibilidade e forma de recebimento.
+
+CAUSAS MAIS COMUNS
+- Colaborador enviando o comprovante mensal de rotina (fluxo recorrente, não é bem um problema)
+- Comprovante ilegível, incompleto ou fora do mês de referência
+- Filho fora da faixa etária ou do enquadramento definido na política do benefício
+- Envio após a data de corte do mês, empurrando o pagamento para a competência seguinte
+
+O QUE VERIFICAR ANTES DE RESPONDER
+- O comprovante anexado mostra nome da criança, valor pago e mês de referência?
+- O colaborador é elegível ao benefício (filho dentro da faixa etária da política)?
+- O envio ocorreu dentro do prazo de corte do mês vigente?
+
+COMO ORIENTAR O COLABORADOR
+Confirmar o recebimento do comprovante e informar que o valor entra no próximo pagamento processado. Quando o comprovante está incompleto, pedir o documento correto antes de prosseguir. Se o colaborador não é elegível, explicar a regra da política com a faixa etária/condição aplicável.
+
+PERGUNTAS FREQUENTES
+P: Como faço para receber o auxílio creche?
+R: Envie mensalmente, por chamado, o comprovante de pagamento da creche ou cuidadora com nome da criança, valor e mês de referência. O reembolso entra no pagamento processado após o envio, respeitando a data de corte do mês.
+
+P: Por que não recebi o auxílio creche este mês?
+R: As causas mais comuns são: comprovante enviado após a data de corte do mês (entra na competência seguinte), comprovante incompleto/ilegível, ou a criança está fora da faixa etária prevista na política do benefício. Confira esses pontos e reenvie se necessário.
+
+(Base construída a partir do histórico de 326 chamados desta categoria no TomTicket, com dados pessoais removidos.)

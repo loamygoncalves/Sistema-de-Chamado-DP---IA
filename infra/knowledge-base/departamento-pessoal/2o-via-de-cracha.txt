@@ -1,0 +1,22 @@
+CATEGORIA: 2º VIA DE CRACHÁ
+Área responsável: Departamento Pessoal — Cadastro
+
+RESUMO
+Solicitação de segunda via por perda, dano, roubo ou movimentação interna.
+
+CAUSAS MAIS COMUNS
+- Perda ou extravio
+- Dano que compromete a legibilidade/funcionalidade
+- Movimentação interna (mudança de hub/função)
+
+O QUE VERIFICAR ANTES DE RESPONDER
+- Qual o motivo da solicitação (perda, dano, roubo, movimentação)?
+
+COMO ORIENTAR O COLABORADOR
+Reforçar a política de uso pessoal e intransferível do crachá, registrar o pedido de nova via e informar o prazo padrão de até 7 dias úteis para entrega.
+
+PERGUNTAS FREQUENTES
+P: Perdi ou danifiquei meu crachá, o que fazer?
+R: Abra um chamado informando o motivo (perda, dano, roubo ou movimentação interna). O pedido de nova via é registrado com prazo de entrega de até 7 dias úteis.
+
+(Base construída a partir do histórico de 61 chamados desta categoria no TomTicket, com dados pessoais removidos.)

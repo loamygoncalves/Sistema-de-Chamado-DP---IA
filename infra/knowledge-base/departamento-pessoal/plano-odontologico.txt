@@ -1,0 +1,22 @@
+CATEGORIA: PLANO ODONTOLÓGICO
+Área responsável: Departamento Pessoal — Benefícios (Odontológico)
+
+RESUMO
+Inclusão/exclusão de dependentes e acesso à carteirinha — segue basicamente a mesma regra do plano de saúde.
+
+CAUSAS MAIS COMUNS
+- Inclusão de dependente fora da janela de 30 dias do evento elegível
+- Carteirinha não aparecendo no aplicativo por atraso de sincronização com a operadora
+
+O QUE VERIFICAR ANTES DE RESPONDER
+- Qual a data do evento elegível (nascimento/casamento) e ela está dentro dos 30 dias?
+- O plano do titular já está ativo?
+
+COMO ORIENTAR O COLABORADOR
+Aplicar a mesma regra de janela de 30 dias do plano de saúde. Para problemas de visualização da carteirinha no app, confirmar que o plano está ativo e orientar reconsulta após alguns dias de sincronização.
+
+PERGUNTAS FREQUENTES
+P: Como incluo meu filho ou cônjuge no plano odontológico?
+R: A inclusão só é permitida no momento da ativação do titular no plano, ou em até 30 dias após um evento elegível (nascimento de filho, casamento). Fora dessas janelas, não é possível incluir dependentes pelas regras atuais do plano.
+
+(Base construída a partir do histórico de 66 chamados desta categoria no TomTicket, com dados pessoais removidos.)

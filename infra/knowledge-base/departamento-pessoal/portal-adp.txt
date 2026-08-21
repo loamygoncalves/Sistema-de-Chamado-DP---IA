@@ -1,0 +1,23 @@
+CATEGORIA: PORTAL ADP
+Área responsável: Departamento Pessoal — Acessos
+
+RESUMO
+Bloqueio por excesso de tentativas de login e pedidos de link de redefinição de senha — quase sempre ligados à migração do sistema de login do ADP eXpert.
+
+CAUSAS MAIS COMUNS
+- Uso do link antigo do ADP (fora do ar após a migração de login)
+- Excesso de tentativas de senha incorreta
+- Primeiro acesso não migrado (cadastro de e-mail/telefone pendente)
+
+O QUE VERIFICAR ANTES DE RESPONDER
+- O colaborador está usando o link oficial atual do ADP eXpert, ou um link/favorito antigo?
+- Já passou pelo fluxo de migração (cadastro de e-mail e telefone, validação por código)?
+
+COMO ORIENTAR O COLABORADOR
+Orientar excluir o link antigo salvo em favoritos/atalhos e acessar pelo link oficial atual, seguindo o fluxo de migração (cadastro de e-mail/telefone e validação por código). Esta é praticamente uma resposta padrão, boa candidata a resposta automática da IA sem precisar de analista.
+
+PERGUNTAS FREQUENTES
+P: Meu acesso ao ADP travou por excesso de tentativas, o que fazer?
+R: O ADP eXpert passou por uma atualização no processo de login. Exclua o link antigo salvo em favoritos, acesse pelo link oficial atual e siga o fluxo de migração: cadastro de e-mail e telefone, seguido da validação por código.
+
+(Base construída a partir do histórico de 190 chamados desta categoria no TomTicket, com dados pessoais removidos.)

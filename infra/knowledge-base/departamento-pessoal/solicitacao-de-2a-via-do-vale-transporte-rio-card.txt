@@ -1,0 +1,16 @@
+CATEGORIA: SOLICITAÇÃO DE 2ª VIA DO VALE TRANSPORTE - RIO CARD
+Área responsável: Departamento Pessoal — Benefícios (Vale Transporte)
+
+RESUMO
+Pedido específico de segunda via do cartão RioCard.
+
+CAUSAS MAIS COMUNS
+- Perda ou cancelamento do cartão pelo próprio app da operadora
+
+O QUE VERIFICAR ANTES DE RESPONDER
+- O colaborador já tentou solicitar a 2ª via direto pelo app da operadora?
+
+COMO ORIENTAR O COLABORADOR
+Informar que a 2ª via pode ser solicitada diretamente pelo aplicativo da operadora, ou registrar o pedido junto ao DP quando necessário, alertando sobre a taxa de aproximadamente R$35 cobrada pela operadora e o prazo de até 10 dias úteis para entrega.
+
+(Base construída a partir do histórico de 7 chamados desta categoria no TomTicket, com dados pessoais removidos.)

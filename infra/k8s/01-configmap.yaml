@@ -33,6 +33,8 @@ data:
   CORS_ORIGINS: '["https://operacoes-playground.internal.beepsaude.com.br"]'
   LOCAL_KNOWLEDGE_FOLDER: "/data/knowledge-base"
   LOCAL_KNOWLEDGE_DEFAULT_DEPARTMENT_SLUG: ""
+  GOOGLE_DRIVE_FOLDER_ID: ""
+  GOOGLE_DRIVE_DEFAULT_DEPARTMENT_SLUG: ""
   AWS_REGION: "us-east-1"
   BEDROCK_MODEL_ID: ""
   BEDROCK_EMBEDDING_MODEL_ID: "amazon.titan-embed-text-v2:0"

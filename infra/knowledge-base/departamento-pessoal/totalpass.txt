@@ -1,0 +1,20 @@
+CATEGORIA: TOTALPASS
+Área responsável: Departamento Pessoal — Benefícios
+
+RESUMO
+Cadastro, cancelamento e dúvidas sobre a plataforma de bem-estar TotalPass.
+
+CAUSAS MAIS COMUNS
+- E-mail de cadastro diferente do cadastrado na admissão
+
+O QUE VERIFICAR ANTES DE RESPONDER
+- Qual e-mail o colaborador está tentando usar?
+
+COMO ORIENTAR O COLABORADOR
+Confirmar o e-mail cadastrado na admissão. Para cancelamento, encaminhar ao e-mail dedicado com nome completo, matrícula, RG e CPF — o benefício permanece ativo até o fim do ciclo vigente.
+
+PERGUNTAS FREQUENTES
+P: Como cancelo o TotalPass?
+R: O cancelamento é feito por e-mail dedicado, informando nome completo, matrícula, RG e CPF. O benefício permanece ativo até o final do ciclo vigente.
+
+(Base construída a partir do histórico de 30 chamados desta categoria no TomTicket, com dados pessoais removidos.)

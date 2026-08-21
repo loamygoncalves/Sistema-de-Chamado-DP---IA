@@ -1,0 +1,16 @@
+CATEGORIA: TELEMEDICINA CONEXA
+Área responsável: Departamento Pessoal — Benefícios (Plano de Saúde)
+
+RESUMO
+Problemas de acesso ao aplicativo de telemedicina vinculado ao plano de saúde.
+
+CAUSAS MAIS COMUNS
+- Login feito com e-mail diferente do cadastrado no plano
+
+O QUE VERIFICAR ANTES DE RESPONDER
+- Qual e-mail está sendo usado para o login no app?
+
+COMO ORIENTAR O COLABORADOR
+Confirmar o e-mail correto de acesso vinculado ao plano ativo.
+
+(Base construída a partir do histórico de 2 chamados desta categoria no TomTicket, com dados pessoais removidos.)

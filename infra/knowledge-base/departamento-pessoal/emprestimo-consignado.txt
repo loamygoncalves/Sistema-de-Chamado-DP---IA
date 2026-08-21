@@ -1,0 +1,21 @@
+CATEGORIA: EMPRÉSTIMO CONSIGNADO
+Área responsável: Departamento Pessoal — Folha de Pagamento
+
+RESUMO
+Dúvidas e contestações sobre descontos de empréstimo consignado (Crédito do Trabalhador/eSocial).
+
+CAUSAS MAIS COMUNS
+- Empréstimo contratado em outra empresa e transferido automaticamente via eSocial
+- Divergência entre o número de parcelas esperado e o informado pela base oficial
+
+O QUE VERIFICAR ANTES DE RESPONDER
+- O desconto está de acordo com as informações recebidas da base oficial do Crédito do Trabalhador/eSocial?
+
+COMO ORIENTAR O COLABORADOR
+Explicar que a empresa apenas segue o valor e as regras informadas pela plataforma oficial do Crédito do Trabalhador/eSocial, sem poder alterar por conta própria. Contestações de valor/parcelas devem ser resolvidas diretamente com o banco credor.
+
+PERGUNTAS FREQUENTES
+P: Posso contestar o valor do meu empréstimo consignado com o DP?
+R: O DP apenas aplica o desconto conforme as informações recebidas da base oficial do Crédito do Trabalhador/eSocial. Divergências de valor ou de número de parcelas precisam ser resolvidas diretamente com o banco credor.
+
+(Base construída a partir do histórico de 23 chamados desta categoria no TomTicket, com dados pessoais removidos.)

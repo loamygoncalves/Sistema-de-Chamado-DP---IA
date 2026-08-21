@@ -1,0 +1,28 @@
+CATEGORIA: PLANO DE SAÚDE
+Área responsável: Departamento Pessoal — Benefícios (Plano de Saúde)
+
+RESUMO
+Inclusão/exclusão de dependentes, problemas de primeiro acesso ao app da operadora, dúvidas sobre continuidade do plano após desligamento.
+
+CAUSAS MAIS COMUNS
+- Erro no cadastro de primeiro acesso ao app da operadora (Bradesco Saúde)
+- Inclusão de dependente solicitada fora da janela de 30 dias do evento elegível (nascimento, casamento)
+- Plano encerrado por desligamento — o plano é 100% custeado pela empresa e não pode ser mantido após o desligamento
+- Determinação judicial mantendo o plano ativo até o fim de um período de estabilidade específico
+
+O QUE VERIFICAR ANTES DE RESPONDER
+- Qual o tipo de solicitação: inclusão, exclusão, acesso ao app, ou dúvida sobre continuidade?
+- Se for inclusão de dependente: qual a data do evento elegível (nascimento/casamento) e ela está dentro dos 30 dias?
+- O colaborador está ativo, desligado, ou em período de estabilidade judicial?
+
+COMO ORIENTAR O COLABORADOR
+Para erro de primeiro acesso, orientar cadastro pelo app Bradesco Seguros antes do Bradesco Saúde. Para inclusão de dependente, validar a janela de 30 dias antes de prosseguir. Para desligamento, explicar que o plano é encerrado por ser 100% custeado pela empresa (exceto quando há estabilidade judicial ativa, que mantém o plano só até o fim do período determinado).
+
+PERGUNTAS FREQUENTES
+P: Posso incluir um dependente no plano de saúde a qualquer momento?
+R: Não. A inclusão só é permitida no momento da ativação do titular no plano, ou em até 30 dias após um evento elegível como nascimento de filho ou casamento. Fora dessas janelas, não é possível incluir dependentes pelas regras atuais do plano.
+
+P: Posso manter o plano de saúde depois de sair da empresa?
+R: Não. O plano de saúde é 100% custeado pela empresa, então não é possível permanecer nele após o desligamento — exceto em casos de determinação judicial de estabilidade, que mantém o plano ativo apenas até o fim do período determinado.
+
+(Base construída a partir do histórico de 138 chamados desta categoria no TomTicket, com dados pessoais removidos.)

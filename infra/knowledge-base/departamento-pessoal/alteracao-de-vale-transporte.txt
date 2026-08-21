@@ -1,0 +1,24 @@
+CATEGORIA: ALTERAÇÃO DE VALE TRANSPORTE
+Área responsável: Departamento Pessoal — Benefícios (Vale Transporte)
+
+RESUMO
+Mudança de trajeto ou meio de transporte (ônibus, metrô, trem) por mudança de endereço ou de rotina.
+
+CAUSAS MAIS COMUNS
+- Mudança de endereço não formalizada com o comprovante atualizado
+- Combinação de meios de transporte (ex.: ônibus + metrô) que exige o Bilhete Único
+- Pedido feito após a data de corte do mês (dia 15)
+
+O QUE VERIFICAR ANTES DE RESPONDER
+- O endereço atual está atualizado no cadastro, com comprovante anexado?
+- Quais meios de transporte são usados na ida e na volta?
+- O pedido foi feito antes ou depois do corte do mês?
+
+COMO ORIENTAR O COLABORADOR
+Confirmar o trajeto informado e atualizar o benefício de acordo (incluindo Bilhete Único quando há combinação de modais). A alteração só entra em vigor a partir da competência seguinte se o pedido chegar após o dia 15.
+
+PERGUNTAS FREQUENTES
+P: Mudei de endereço, como atualizo meu vale transporte?
+R: Envie o comprovante de endereço atualizado junto ao chamado, detalhando o trajeto de ida e volta e os meios de transporte usados. A atualização entra em vigor a partir da competência seguinte se o pedido for feito depois do dia 15.
+
+(Base construída a partir do histórico de 94 chamados desta categoria no TomTicket, com dados pessoais removidos.)

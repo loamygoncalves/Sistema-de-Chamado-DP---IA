@@ -1,0 +1,22 @@
+CATEGORIA: GYMPASS
+Área responsável: Departamento Pessoal — Benefícios
+
+RESUMO
+Cadastro na plataforma (atual Wellhub), cancelamento e contestação de cobrança.
+
+CAUSAS MAIS COMUNS
+- E-mail usado no cadastro diferente do e-mail informado na admissão
+- Cancelamento solicitado mas cobrança ainda aparece por estar dentro do ciclo vigente
+
+O QUE VERIFICAR ANTES DE RESPONDER
+- Qual e-mail o colaborador está usando para o cadastro?
+- Quando o cancelamento foi solicitado, em relação ao fechamento do ciclo de cobrança?
+
+COMO ORIENTAR O COLABORADOR
+Confirmar o e-mail cadastrado na admissão para uso no app. Para cobrança após cancelamento, explicar que o benefício permanece ativo até o fim do ciclo vigente, e encaminhar contestações à operadora quando necessário.
+
+PERGUNTAS FREQUENTES
+P: Como me cadastro no Gympass/Wellhub?
+R: Baixe o aplicativo e cadastre-se usando o mesmo e-mail informado no momento da admissão. Colaboradores admitidos no mês têm cadastro disponível a partir do dia 10 do mês seguinte.
+
+(Base construída a partir do histórico de 30 chamados desta categoria no TomTicket, com dados pessoais removidos.)

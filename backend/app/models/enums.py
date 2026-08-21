@@ -78,6 +78,7 @@ class DocumentType(str, enum.Enum):
 class DocumentSourceProvider(str, enum.Enum):
     UPLOAD = "upload"
     LOCAL_FOLDER = "local_folder"
+    GOOGLE_DRIVE = "google_drive"
 
 
 class ChatRole(str, enum.Enum):

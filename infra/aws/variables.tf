@@ -241,3 +241,26 @@ variable "local_knowledge_default_department_slug" {
   type    = string
   default = ""
 }
+
+# ---------------------------------------------------------------------------
+# Sincronização com pasta do Google Drive (alternativa à pasta local acima) —
+# ver docs/GOOGLE_DRIVE_SETUP.md para os passos de criação da service account.
+# ---------------------------------------------------------------------------
+
+variable "google_drive_folder_id" {
+  description = "Deixe em branco para desativar a sincronização com o Google Drive"
+  type        = string
+  default     = ""
+}
+
+variable "google_service_account_json" {
+  description = "Conteúdo do JSON da service account (não o caminho do arquivo)"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "google_drive_default_department_slug" {
+  type    = string
+  default = ""
+}

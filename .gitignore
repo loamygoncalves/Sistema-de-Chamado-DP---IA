@@ -27,9 +27,13 @@ npm-debug.log*
 # Docker volumes (local dev)
 infra/.data/
 
-# Arquivos de teste soltos na pasta local de conhecimento (dev)
+# Arquivos de teste soltos na pasta local de conhecimento (dev) — a base
+# gerada a partir do histórico do TomTicket é conteúdo versionado de verdade,
+# não um teste solto, por isso tem exceção própria.
 infra/knowledge-base/*
 !infra/knowledge-base/README.md
+!infra/knowledge-base/departamento-pessoal/
+!infra/knowledge-base/departamento-pessoal/*.txt
 
 # Terraform / k8s local
 *.tfstate

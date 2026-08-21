@@ -75,6 +75,16 @@ class Settings(BaseSettings):
     LOCAL_KNOWLEDGE_FOLDER: str | None = None
     LOCAL_KNOWLEDGE_DEFAULT_DEPARTMENT_SLUG: str | None = None
 
+    # Alternativa à pasta local: sincronização com uma pasta do Google Drive
+    # (útil quando não existe um servidor de arquivos de rede real, mas o
+    # conteúdo já mora numa pasta/Drive compartilhado do Google Workspace).
+    # Não depende do computador de ninguém estar ligado — o backend acessa o
+    # Drive direto pela API, com uma service account (ver
+    # docs/GOOGLE_DRIVE_SETUP.md). Deixe em branco para desativar.
+    GOOGLE_DRIVE_FOLDER_ID: str | None = None
+    GOOGLE_SERVICE_ACCOUNT_JSON: str | None = None  # conteúdo JSON da chave da service account (não o caminho)
+    GOOGLE_DRIVE_DEFAULT_DEPARTMENT_SLUG: str | None = None
+
     CORS_ORIGINS: list[str] = ["http://localhost:3000"]
 
 

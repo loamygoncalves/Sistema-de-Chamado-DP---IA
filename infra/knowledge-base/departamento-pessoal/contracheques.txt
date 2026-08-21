@@ -1,0 +1,22 @@
+CATEGORIA: CONTRACHEQUES
+Área responsável: Departamento Pessoal — Folha de Pagamento / Acessos
+
+RESUMO
+Problemas de acesso ao contracheque (geralmente ligados ao Portal ADP) e descontos considerados indevidos.
+
+CAUSAS MAIS COMUNS
+- Bloqueio de acesso ao ADP (mesma causa do Portal ADP)
+- Falta lançada como "Falta Devida" por ausência de justificativa validada
+
+O QUE VERIFICAR ANTES DE RESPONDER
+- O colaborador consegue acessar o Portal ADP normalmente?
+- Se há desconto por falta, existe uma justificativa formal enviada e validada?
+
+COMO ORIENTAR O COLABORADOR
+Para acesso, aplicar o mesmo fluxo de Portal ADP. Para desconto por falta, verificar se há justificativa pendente de validação e orientar o canal correto para envio.
+
+PERGUNTAS FREQUENTES
+P: Não consigo acessar meu contracheque, o que fazer?
+R: O acesso ao contracheque é feito pelo Portal ADP. Se está bloqueado, siga o fluxo de migração do ADP eXpert: link oficial atualizado, cadastro de e-mail/telefone e validação por código.
+
+(Base construída a partir do histórico de 38 chamados desta categoria no TomTicket, com dados pessoais removidos.)

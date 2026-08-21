@@ -1,0 +1,16 @@
+CATEGORIA: CONVENÇÃO COLETIVA
+Área responsável: Departamento Pessoal
+
+RESUMO
+Dúvidas sobre o dissídio/reajuste salarial anual e o sindicato aplicável.
+
+CAUSAS MAIS COMUNS
+- Convenção coletiva do ano ainda não publicada oficialmente pelo sindicato
+
+O QUE VERIFICAR ANTES DE RESPONDER
+- A convenção coletiva do período em questão já foi publicada pelo sindicato da categoria?
+
+COMO ORIENTAR O COLABORADOR
+Explicar que o reajuste só é aplicado após a publicação oficial da convenção coletiva pelo sindicato, e que a comunicação formal é feita a todos os colaboradores elegíveis assim que isso ocorrer.
+
+(Base construída a partir do histórico de 3 chamados desta categoria no TomTicket, com dados pessoais removidos.)

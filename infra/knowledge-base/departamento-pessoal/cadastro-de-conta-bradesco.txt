@@ -1,0 +1,16 @@
+CATEGORIA: CADASTRO DE CONTA BRADESCO
+Área responsável: Departamento Pessoal — Cadastro
+
+RESUMO
+Atualização de dados bancários para depósito de salário.
+
+CAUSAS MAIS COMUNS
+- Troca de banco ou de conta
+
+O QUE VERIFICAR ANTES DE RESPONDER
+- Os dados bancários informados estão completos (banco, agência, conta e dígito)?
+
+COMO ORIENTAR O COLABORADOR
+Atualizar os dados bancários no cadastro para os próximos pagamentos, confirmando o recebimento das informações.
+
+(Base construída a partir do histórico de 5 chamados desta categoria no TomTicket, com dados pessoais removidos.)

@@ -1,0 +1,22 @@
+CATEGORIA: FÉRIAS
+Área responsável: Departamento Pessoal — Folha de Pagamento
+
+RESUMO
+Agendamento, cálculo do pagamento (incluindo adicionais) e adiantamento do 13º nas férias.
+
+CAUSAS MAIS COMUNS
+- Agendamento de férias depende de alinhamento com o gestor direto, não é feito diretamente pelo DP
+- Adicionais (como insalubridade) somados ao salário em um único evento na folha, causando dúvida
+
+O QUE VERIFICAR ANTES DE RESPONDER
+- A dúvida é sobre agendamento (depende do gestor) ou sobre o cálculo do valor pago?
+- Há adicionais contratuais que compõem a base de cálculo das férias?
+
+COMO ORIENTAR O COLABORADOR
+Para agendamento, orientar o alinhamento com o gestor direto. Para dúvidas de valor, detalhar a composição do cálculo evento por evento, mostrando onde cada adicional está refletido.
+
+PERGUNTAS FREQUENTES
+P: Como agendo minhas férias?
+R: O agendamento de férias precisa ser alinhado diretamente com o seu gestor. O DP confirma e processa a programação depois desse alinhamento.
+
+(Base construída a partir do histórico de 21 chamados desta categoria no TomTicket, com dados pessoais removidos.)

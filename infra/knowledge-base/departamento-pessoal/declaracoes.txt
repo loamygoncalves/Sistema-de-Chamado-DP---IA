@@ -1,0 +1,22 @@
+CATEGORIA: DECLARAÇÕES
+Área responsável: Departamento Pessoal — Cadastro
+
+RESUMO
+Pedidos de declaração de vínculo empregatício/experiência profissional, homologação e baixa na Carteira de Trabalho Digital.
+
+CAUSAS MAIS COMUNS
+- Necessidade de documento formal para terceiros (processo seletivo, escola, financiamento)
+- Atualização da CTPS Digital pode levar até 20 dias úteis após o desligamento
+
+O QUE VERIFICAR ANTES DE RESPONDER
+- Qual o objetivo/uso da declaração (para exigir os dados corretos)?
+- Se for sobre baixa na CTPS, quantos dias úteis se passaram desde o desligamento?
+
+COMO ORIENTAR O COLABORADOR
+Emitir a declaração em papel timbrado com os dados solicitados. Para dúvidas sobre baixa na CTPS Digital, explicar o prazo de até 20 dias úteis para atualização, incluindo o tempo do próprio aplicativo.
+
+PERGUNTAS FREQUENTES
+P: Como solicito uma declaração de vínculo empregatício?
+R: Abra um chamado detalhando a finalidade da declaração e os dados que ela precisa conter (cargo, período, atividades). O documento é emitido em papel timbrado da empresa.
+
+(Base construída a partir do histórico de 48 chamados desta categoria no TomTicket, com dados pessoais removidos.)

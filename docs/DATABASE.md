@@ -133,16 +133,18 @@ flag se o autor não for analyst+.
 ### `documents`
 `id, filename, file_type ENUM(pdf,docx,xlsx,csv,pptx,txt), department_id FK NULLABLE,
 storage_path, checksum, indexed_at NULLABLE, chunk_count, uploaded_by FK users NULLABLE,
-source_provider ENUM(upload,local_folder) default upload, external_file_id UNIQUE NULLABLE,
+source_provider ENUM(upload,local_folder,google_drive) default upload, external_file_id UNIQUE NULLABLE,
 external_modified_time NULLABLE, created_at`.
 
-`uploaded_by` é nulo para documentos sincronizados automaticamente da pasta
-local/de rede (`source_provider=local_folder`) — não há um usuário humano que
-fez o upload. `external_file_id` (o caminho do arquivo relativo à pasta,
-ex.: `beneficios/vale-refeicao.pdf`) identifica o documento entre
-sincronizações para decidir se ele é novo, mudou (`external_modified_time` —
-o `mtime` do arquivo — mais recente que o registrado) ou pode ser pulado sem
-reprocessar.
+`uploaded_by` é nulo para documentos sincronizados automaticamente — da pasta
+local/de rede (`source_provider=local_folder`) ou do Google Drive
+(`source_provider=google_drive`) — não há um usuário humano que fez o upload.
+`external_file_id` identifica o documento entre sincronizações para decidir
+se ele é novo, mudou, ou pode ser pulado sem reprocessar: para `local_folder`
+é o caminho do arquivo relativo à pasta (ex.: `beneficios/vale-refeicao.pdf`)
+comparado pelo `mtime`; para `google_drive` é o id do arquivo no Drive
+comparado pelo `modifiedTime` retornado pela API. As duas fontes coexistem —
+dá pra usar só uma, ou as duas ao mesmo tempo.
 
 ### `chat_conversations`
 `id, user_id FK, title, status ENUM(ativa,encerrada) default ativa, closed_at NULLABLE, created_at, updated_at`.

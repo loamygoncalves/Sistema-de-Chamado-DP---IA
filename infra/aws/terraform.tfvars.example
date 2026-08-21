@@ -20,6 +20,10 @@ bedrock_model_id = ""
 # anthropic_api_key = ""
 # openai_api_key    = ""
 
+# Sincronização com pasta do Google Drive (opcional) — ver docs/GOOGLE_DRIVE_SETUP.md
+# google_drive_folder_id      = ""
+# google_service_account_json = ""
+
 # SSO corporativo real da Beep (Azure AD ou Keycloak já existente) — este
 # Terraform não cria um Keycloak novo.
 auth_provider      = "azure_ad"

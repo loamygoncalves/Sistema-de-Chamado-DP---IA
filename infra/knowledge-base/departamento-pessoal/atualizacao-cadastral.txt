@@ -1,0 +1,23 @@
+CATEGORIA: ATUALIZAÇÃO CADASTRAL
+Área responsável: Departamento Pessoal — Cadastro
+
+RESUMO
+Envio de documentos para atualização cadastral: CNH, registro profissional (Coren), e-mail corporativo, dados pessoais.
+
+CAUSAS MAIS COMUNS
+- Renovação de documento profissional/habilitação
+- Mudança de cargo/função exigindo atualização de e-mail ou sistemas
+- Documento enviado incompleto ou ilegível
+
+O QUE VERIFICAR ANTES DE RESPONDER
+- O documento enviado está legível e completo?
+- Está claro qual dado cadastral deve ser alterado?
+
+COMO ORIENTAR O COLABORADOR
+Confirmar o recebimento do documento, realizar a atualização cadastral correspondente e agradecer o envio. Fluxo simples e de baixo atrito na maioria dos casos.
+
+PERGUNTAS FREQUENTES
+P: Como atualizo minha CNH ou registro profissional (Coren) no cadastro?
+R: Abra um chamado anexando o documento atualizado, legível e completo. O Departamento Pessoal confirma o recebimento e realiza a atualização cadastral.
+
+(Base construída a partir do histórico de 172 chamados desta categoria no TomTicket, com dados pessoais removidos.)
