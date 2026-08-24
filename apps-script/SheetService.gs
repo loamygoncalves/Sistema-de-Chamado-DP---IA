@@ -9,12 +9,18 @@ function ss_() {
   return SpreadsheetApp.getActiveSpreadsheet();
 }
 
-/** Devolve a aba `name`, criando-a com o cabeçalho `headers` se não existir. */
+/** Devolve a aba `name`, criando-a com o cabeçalho `headers` se não existir.
+ * Também corrige uma aba que ficou pela metade (existe, mas sem cabeçalho)
+ * por causa de uma inicialização anterior que travou no meio do caminho —
+ * sem isso, alguém teria que apagar a aba manualmente para tentar de novo. */
 function sheet_(name, headers) {
   var ss = ss_();
   var sheet = ss.getSheetByName(name);
   if (!sheet) {
     sheet = ss.insertSheet(name);
+    sheet.appendRow(headers);
+    sheet.setFrozenRows(1);
+  } else if (sheet.getLastColumn() === 0) {
     sheet.appendRow(headers);
     sheet.setFrozenRows(1);
   }
