@@ -44,14 +44,23 @@ function initializeSpreadsheet() {
   sheet_(SHEETS.HISTORICO, HEADERS.Historico);
   sheet_(SHEETS.ANEXOS, HEADERS.Anexos);
 
-  SpreadsheetApp.getUi().alert(
+  var doneMessage =
     'Planilhas prontas!\n\n' +
     'Antes de divulgar o link do sistema:\n' +
     '1) Edite a aba "Analistas" com os e-mails reais do time de DP.\n' +
     '2) (Opcional) Em Configurações do projeto > Propriedades do script, defina ANTHROPIC_API_KEY ' +
     'para respostas mais naturais e resumos de chamado com IA de verdade.\n' +
-    '3) Publique como app da Web (Implantar > Nova implantação).'
-  );
+    '3) Publique como app da Web (Implantar > Nova implantação).';
+  try {
+    // SpreadsheetApp.getUi() só funciona quando o script é disparado pela
+    // própria interface da planilha (o menu "BEEP Service Desk"). Rodando
+    // pelo botão "Executar" do editor (como na primeira vez, antes de o
+    // menu existir), getUi() não tem contexto de UI e lança exceção — cai
+    // para o registro de execução nesse caso, sem quebrar a inicialização.
+    SpreadsheetApp.getUi().alert(doneMessage);
+  } catch (e) {
+    Logger.log(doneMessage);
+  }
 }
 
 var SEED_DEPARTMENTS_ = [
