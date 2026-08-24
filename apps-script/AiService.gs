@@ -45,7 +45,7 @@ function scoreToConfidence_(raw) {
 
 function retrieveFaqs_(searchText, topN) {
   var tokens = tokenize_(searchText);
-  var faqs = rowsAsObjects_(sheet_(SHEETS.FAQS, HEADERS.FAQS));
+  var faqs = rowsAsObjects_(sheet_(SHEETS.FAQS, HEADERS.FAQs));
   if (tokens.length === 0 || faqs.length === 0) return [];
   var scored = faqs.map(function (f) { return { faq: f, raw: rawScore_(f, tokens) }; });
   scored.sort(function (a, b) { return b.raw - a.raw; });

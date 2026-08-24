@@ -19,7 +19,7 @@ function initializeSpreadsheet() {
     });
   }
 
-  var faqs = sheet_(SHEETS.FAQS, HEADERS.FAQS);
+  var faqs = sheet_(SHEETS.FAQS, HEADERS.FAQs);
   if (faqs.getLastRow() < 2) {
     SEED_FAQS_.forEach(function (f) {
       appendObject_(faqs, { Pergunta: f.q, Resposta: f.a, Departamento: f.dept });
