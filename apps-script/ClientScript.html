@@ -1,0 +1,772 @@
+<script>
+(function () {
+  'use strict';
+
+  /* ============================================================
+     Ponte com o servidor — envolve google.script.run numa Promise
+     para o resto do código poder usar async/await.
+     ============================================================ */
+  function call(fnName) {
+    var args = Array.prototype.slice.call(arguments, 1);
+    return new Promise(function (resolve, reject) {
+      var runner = google.script.run
+        .withSuccessHandler(resolve)
+        .withFailureHandler(function (err) { reject(err); });
+      runner[fnName].apply(runner, args);
+    });
+  }
+
+  function errorMessage(e) { return (e && e.message) ? e.message : String(e); }
+
+  function el(tag, attrs, children) {
+    var e = document.createElement(tag);
+    attrs = attrs || {};
+    Object.keys(attrs).forEach(function (k) {
+      if (attrs[k] === null || attrs[k] === undefined) return;
+      if (k === 'class') e.className = attrs[k];
+      else if (k === 'onclick' || k === 'onchange' || k === 'oninput' || k === 'onsubmit') e.addEventListener(k.slice(2), attrs[k]);
+      else e.setAttribute(k, attrs[k]);
+    });
+    (children || []).forEach(function (c) { if (c !== null && c !== undefined) e.appendChild(typeof c === 'string' ? document.createTextNode(c) : c); });
+    return e;
+  }
+
+  function readFileAsBase64_(file) {
+    return new Promise(function (resolve, reject) {
+      var reader = new FileReader();
+      reader.onload = function () { resolve(String(reader.result).split(',')[1]); };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function formatDate_(d) {
+    var date = new Date(d);
+    if (isNaN(date.getTime())) return String(d);
+    return date.toLocaleString('pt-BR');
+  }
+
+  var STATUS_LABEL = { em_triagem: 'Em triagem', em_atendimento: 'Em atendimento', aguardando_usuario: 'Aguardando usuário', resolvido: 'Resolvido', encerrado: 'Encerrado' };
+  var STATUS_CLASS = { em_triagem: 'brand', em_atendimento: 'warning', aguardando_usuario: 'warning', resolvido: 'success', encerrado: 'neutral' };
+  var PRIORITY_LABEL = { baixa: 'Baixa', media: 'Média', alta: 'Alta', critica: 'Crítica' };
+  var PRIORITY_CLASS = { baixa: 'neutral', media: 'brand', alta: 'warning', critica: 'critical' };
+
+  function slaState_(t) {
+    if (!t.slaDueAt || t.status === 'resolvido' || t.status === 'encerrado') return 'neutral';
+    var diffH = (new Date(t.slaDueAt) - new Date()) / 3600000;
+    if (diffH < 0) return 'critical';
+    if (diffH <= 6) return 'warning';
+    return 'success';
+  }
+
+  function slaLabel_(t) {
+    if (!t.slaDueAt || t.status === 'resolvido' || t.status === 'encerrado') return '—';
+    var diffMs = new Date(t.slaDueAt) - new Date();
+    if (diffMs < 0) return 'vencido';
+    return Math.round(diffMs / 3600000) + 'h restantes';
+  }
+
+  function ticketRow_(t, onClick) {
+    var sState = slaState_(t);
+    return el('div', { class: 'card ticket-row' + (sState === 'critical' ? ' overdue' : ''), onclick: onClick }, [
+      el('div', { class: 'top-line' }, [
+        el('span', { class: 'mono', style: 'font-size:11.5px; color:var(--ink-soft);' }, [t.protocol]),
+        el('span', { class: 'pill ' + PRIORITY_CLASS[t.priority] }, [PRIORITY_LABEL[t.priority] || t.priority]),
+        el('span', { class: 'pill ' + STATUS_CLASS[t.status] }, [STATUS_LABEL[t.status] || t.status]),
+        el('span', { class: 'pill ' + sState }, [slaLabel_(t)])
+      ]),
+      el('div', { class: 'subject' }, [t.subject]),
+      el('div', { class: 'meta' }, [
+        t.department + ' · ' + t.requesterName + ' · ',
+        t.assignedTo ? el('b', {}, ['Analista: ' + t.assignedTo]) : el('span', { style: 'font-style:italic;' }, ['sem analista vinculado'])
+      ])
+    ]);
+  }
+
+  /* ============================================================
+     Estado global do cliente
+     ============================================================ */
+  var state = {
+    user: null,
+    departments: [],
+    view: 'chat',
+    messages: [],
+    lastTurn: null,
+    ticketForm: null,
+    analystView: { mode: 'inbox', status: '', overdue: false, pending: false, q: '' }
+  };
+
+  async function boot() {
+    try {
+      state.user = await call('getCurrentUser');
+      state.departments = await call('getDepartments');
+    } catch (e) {
+      document.getElementById('view').innerHTML = '';
+      document.getElementById('view').appendChild(el('div', { class: 'card' }, ['Erro ao carregar o BEEP Service Desk: ' + errorMessage(e)]));
+      return;
+    }
+    document.getElementById('userName').textContent = state.user.name;
+    document.getElementById('userEmail').textContent = state.user.email || '(conta sem e-mail detectado)';
+    document.getElementById('userRole').textContent = state.user.role === 'analyst' ? 'Analista' : 'Colaborador';
+    buildTabs();
+    setView(state.user.role === 'analyst' ? 'analyst' : 'chat');
+  }
+
+  function buildTabs() {
+    var tabs = document.getElementById('tabs');
+    tabs.innerHTML = '';
+    var items = [{ id: 'chat', label: 'Perguntar à IA' }];
+    if (state.user.role === 'employee') items.push({ id: 'tickets', label: 'Meus chamados' });
+    if (state.user.role === 'analyst') {
+      items.push({ id: 'analyst', label: 'Fila do analista' });
+      items.push({ id: 'dashboard', label: 'Dashboard' });
+    }
+    items.forEach(function (t) {
+      var btn = el('button', { onclick: function () { setView(t.id); } }, [t.label]);
+      btn.dataset.view = t.id;
+      tabs.appendChild(btn);
+    });
+  }
+
+  function setView(view) {
+    state.view = view;
+    document.querySelectorAll('#tabs button').forEach(function (b) { b.classList.toggle('active', b.dataset.view === view); });
+    var root = document.getElementById('view');
+    root.innerHTML = '';
+    if (view === 'chat') renderChat(root);
+    else if (view === 'tickets') renderMyTickets(root);
+    else if (view === 'analyst') renderAnalyst(root);
+    else if (view === 'dashboard') renderDashboard(root);
+  }
+
+  /* ============================================================
+     Chat com a IA
+     ============================================================ */
+  function renderChat(root) {
+    root.appendChild(el('div', { class: 'card' }, [
+      el('h2', { style: 'margin:0 0 10px; font-size:16px;' }, ['Pergunte à IA do BEEP']),
+      el('p', { style: 'margin:0 0 10px; font-size:12px; color:var(--ink-soft);' }, ['A IA consulta a base de conhecimento antes de sugerir abrir um chamado.']),
+      el('div', { id: 'chatLog' }),
+      el('form', { id: 'chatForm', style: 'display:flex; gap:8px; margin-top:10px;' }, [
+        el('input', { type: 'text', id: 'chatInput', placeholder: 'Digite sua dúvida...' }),
+        el('button', { class: 'btn primary', type: 'submit' }, ['Enviar'])
+      ])
+    ]));
+    document.getElementById('chatForm').addEventListener('submit', function (ev) {
+      ev.preventDefault();
+      var input = document.getElementById('chatInput');
+      var val = input.value.trim();
+      if (!val) return;
+      input.value = '';
+      askQuestion(val);
+    });
+    drawChatLog();
+  }
+
+  function drawChatLog() {
+    var log = document.getElementById('chatLog');
+    if (!log) return;
+    log.innerHTML = '';
+    if (state.messages.length === 0) {
+      log.appendChild(el('p', { class: 'empty' }, ['Faça sua primeira pergunta — abrir chamado é sempre a última alternativa.']));
+    }
+    state.messages.forEach(function (m) {
+      if (m.role === 'user') {
+        log.appendChild(el('div', { class: 'msg user' }, [el('div', { class: 'bubble' }, [m.content])]));
+        return;
+      }
+      if (m.role === 'pending') {
+        log.appendChild(el('div', { class: 'msg assistant' }, [el('div', { class: 'bubble' }, ['Pensando...'])]));
+        return;
+      }
+      var wrap = el('div', { class: 'msg assistant' }, [el('div', { class: 'bubble' }, [m.content])]);
+      var confPct = Math.round(m.confidence * 100);
+      var decisionLabel = m.decision === 'auto_answer' ? 'Resposta automática' : m.decision === 'suggest_ticket' ? 'Sugestão de chamado' : 'Confirmação de chamado necessária';
+      var decisionCls = m.decision === 'auto_answer' ? 'success' : m.decision === 'suggest_ticket' ? 'warning' : 'critical';
+      wrap.appendChild(el('div', { style: 'margin-top:6px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;' }, [
+        el('span', { class: 'pill ' + decisionCls }, [decisionLabel]),
+        el('span', { class: 'mono', style: 'font-size:11.5px; color:var(--ink-soft);' }, [confPct + '% de confiança'])
+      ]));
+      if (m.source) {
+        wrap.appendChild(el('p', { style: 'font-size:11.5px; color:var(--ink-soft); margin:6px 0 0;' }, ['Fonte: ' + m.source.department + ' — "' + m.source.question + '"']));
+      }
+      if (!m.ticket) {
+        if (m.helpful === undefined) {
+          wrap.appendChild(el('div', { style: 'margin-top:8px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;' }, [
+            el('span', { style: 'font-size:12.5px; color:var(--ink-soft);' }, ['Isso resolveu sua dúvida?']),
+            el('button', { class: 'btn', style: 'padding:5px 10px; font-size:12.5px;', onclick: function () { m.helpful = true; drawChatLog(); } }, ['Sim']),
+            el('button', { class: 'btn', style: 'padding:5px 10px; font-size:12.5px;', onclick: function () { m.helpful = false; drawChatLog(); } }, ['Não, preciso de mais ajuda'])
+          ]));
+        } else if (m.helpful === true) {
+          wrap.appendChild(el('p', { style: 'font-size:12px; color:var(--ink-soft); margin-top:6px;' }, ['Que bom! Se precisar de algo mais, é só perguntar.']));
+        } else if (m.declinedTicket) {
+          wrap.appendChild(el('p', { style: 'font-size:12px; color:var(--ink-soft); margin-top:6px;' }, ['Tudo bem! Se mudar de ideia, me pergunte de novo.']));
+        } else if (state.ticketForm && state.ticketForm.forMessage === m) {
+          wrap.appendChild(renderTicketForm(m));
+        } else {
+          wrap.appendChild(el('div', { style: 'margin-top:8px; display:flex; gap:8px; align-items:center; flex-wrap:wrap; background:var(--pulse-tint); border-radius:8px; padding:8px 10px;' }, [
+            el('span', { style: 'font-size:12.5px; color:var(--warning-ink);' }, ['Quer abrir um chamado para um analista do DP?']),
+            el('button', { class: 'btn primary', style: 'padding:5px 10px; font-size:12.5px;', onclick: function () { startTicketForm(m); } }, ['Sim, abrir chamado']),
+            el('button', { class: 'btn', style: 'padding:5px 10px; font-size:12.5px;', onclick: function () { m.declinedTicket = true; drawChatLog(); } }, ['Agora não'])
+          ]));
+        }
+      } else {
+        wrap.appendChild(el('p', { style: 'font-size:12px; color:var(--ink-soft); margin-top:6px;' }, ['✅ Chamado ' + m.ticket + ' aberto. Um analista vai te responder em breve.']));
+      }
+      log.appendChild(wrap);
+    });
+    log.scrollTop = log.scrollHeight;
+  }
+
+  async function askQuestion(query) {
+    state.messages.push({ role: 'user', content: query });
+    state.messages.push({ role: 'pending' });
+    drawChatLog();
+    var historyText = state.lastTurn ? (state.lastTurn.question + ' ' + state.lastTurn.answer) : '';
+    try {
+      var result = await call('askAi', query, historyText);
+      state.messages.pop();
+      state.messages.push({ role: 'assistant', content: result.answer, confidence: result.confidence, decision: result.decision, source: result.source, query: query });
+      state.lastTurn = { question: query, answer: result.answer };
+    } catch (e) {
+      state.messages.pop();
+      state.messages.push({ role: 'assistant', content: 'Ocorreu um erro ao consultar a IA: ' + errorMessage(e), confidence: 0, decision: 'auto_ticket', source: null, query: query });
+    }
+    drawChatLog();
+  }
+
+  /* ---------------- Abertura de chamado a partir do chat ---------------- */
+
+  async function startTicketForm(m) {
+    var profile = await call('getMyProfile');
+    state.ticketForm = {
+      forMessage: m, step: 'form', name: profile.name, matricula: profile.matricula,
+      department: m.source ? m.source.department : (state.departments[0] ? state.departments[0].name : ''),
+      category: '', description: '', subject: '', file: null, loading: false
+    };
+    drawChatLog();
+  }
+
+  function deriveTicketSubject_(m) {
+    if (m.source) return m.source.question;
+    var q = m.query.trim();
+    if (q.length > 70) q = q.slice(0, 67).replace(/\s+\S*$/, '') + '...';
+    return 'Dúvida sobre: ' + q.charAt(0).toUpperCase() + q.slice(1);
+  }
+
+  function renderTicketForm(m) {
+    var tf = state.ticketForm;
+    var box = el('div', { style: 'margin-top:10px; border:1px solid var(--line); border-radius:10px; padding:12px; background:var(--paper);' });
+
+    if (tf.step === 'form') {
+      var fileInput = el('input', { type: 'file' });
+      box.appendChild(el('p', { style: 'margin:0 0 8px; font-weight:700; font-size:13px;' }, ['Abrir chamado para o DP']));
+      box.appendChild(el('label', { class: 'field' }, [el('span', {}, ['Nome completo']),
+        el('input', { type: 'text', value: tf.name, oninput: function (ev) { tf.name = ev.target.value; } })]));
+      box.appendChild(el('label', { class: 'field' }, [el('span', {}, ['Matrícula']),
+        el('input', { type: 'text', value: tf.matricula, oninput: function (ev) { tf.matricula = ev.target.value; } })]));
+      box.appendChild(el('label', { class: 'field' }, [el('span', {}, ['Nicho do assunto (fila)']),
+        el('select', { onchange: function (ev) { tf.department = ev.target.value; } },
+          state.departments.map(function (d) {
+            var opt = el('option', { value: d.name }, [d.name]);
+            if (d.name === tf.department) opt.setAttribute('selected', 'selected');
+            return opt;
+          }))]));
+      box.appendChild(el('label', { class: 'field' }, [el('span', {}, ['Categoria (opcional)']),
+        el('input', { type: 'text', placeholder: 'Ex.: Vale-refeição, ajuste de ponto...', oninput: function (ev) { tf.category = ev.target.value; } })]));
+      box.appendChild(el('label', { class: 'field' }, [el('span', {}, ['Anexar arquivo (opcional)']), fileInput]));
+      box.appendChild(el('div', { style: 'display:flex; justify-content:flex-end; gap:8px;' }, [
+        el('button', { class: 'btn', onclick: function () { state.ticketForm = null; drawChatLog(); } }, ['Cancelar']),
+        el('button', { class: 'btn primary', onclick: async function () {
+          tf.file = fileInput.files[0] || null;
+          tf.loading = true; drawChatLog();
+          try {
+            var previousQuestion = (state.lastTurn && state.lastTurn.question !== m.query) ? state.lastTurn.question : null;
+            tf.description = await call('draftTicketContext', m.query, m.source ? m.source.question : null, previousQuestion);
+            tf.subject = deriveTicketSubject_(m);
+            tf.step = 'review';
+          } catch (e) {
+            alert('Não foi possível preparar o resumo: ' + errorMessage(e));
+          }
+          tf.loading = false;
+          drawChatLog();
+        } }, ['Continuar'])
+      ]));
+      if (tf.loading) box.appendChild(el('p', { class: 'loading' }, ['Preparando o resumo para o analista...']));
+    } else {
+      // Sem campo de "Assunto" aqui de propósito — o colaborador já indicou o
+      // assunto na pergunta feita à IA; pedir de novo seria repetição.
+      var descArea = el('textarea', { rows: 6, oninput: function (ev) { tf.description = ev.target.value; } });
+      descArea.value = tf.description;
+      box.appendChild(el('p', { style: 'margin:0 0 8px; font-weight:700; font-size:13px;' }, ['Confirme ou ajuste antes de abrir']));
+      box.appendChild(el('label', { class: 'field' }, [el('span', {}, ['Descrição para o analista']), descArea]));
+      box.appendChild(el('div', { style: 'display:flex; justify-content:flex-end; gap:8px;' }, [
+        el('button', { class: 'btn', disabled: tf.loading ? 'disabled' : null, onclick: function () { tf.step = 'form'; drawChatLog(); } }, ['Voltar']),
+        el('button', { class: 'btn primary', disabled: tf.loading ? 'disabled' : null, onclick: function () { confirmTicketOpening(m); } }, [tf.loading ? 'Abrindo...' : 'Está de acordo — abrir chamado'])
+      ]));
+    }
+    return box;
+  }
+
+  async function confirmTicketOpening(m) {
+    var tf = state.ticketForm;
+    tf.loading = true; drawChatLog();
+    try {
+      var payload = {
+        name: tf.name, matricula: tf.matricula, department: tf.department, category: tf.category,
+        subject: tf.subject, description: tf.description,
+        source: (m.decision === 'auto_ticket' ? 'ia_automatico' : 'ia_sugerido')
+      };
+      var detail = await call('openTicket', payload);
+      if (tf.file) {
+        var base64 = await readFileAsBase64_(tf.file);
+        await call('uploadAttachment', detail.ticket.id, tf.file.name, tf.file.type || 'application/octet-stream', base64);
+      }
+      m.ticket = detail.ticket.protocol;
+      state.ticketForm = null;
+    } catch (e) {
+      alert('Não foi possível abrir o chamado: ' + errorMessage(e));
+      tf.loading = false;
+    }
+    drawChatLog();
+  }
+
+  /* ============================================================
+     Meus chamados (colaborador)
+     ============================================================ */
+  async function renderMyTickets(root) {
+    root.appendChild(el('h2', { style: 'margin:0 0 12px; font-size:16px;' }, ['Meus chamados']));
+    var list = el('div', { class: 'stack' }, [el('p', { class: 'loading' }, ['Carregando...'])]);
+    root.appendChild(list);
+    var tickets = await call('listTickets', {});
+    list.innerHTML = '';
+    if (tickets.length === 0) { list.appendChild(el('p', { class: 'empty' }, ['Você ainda não abriu nenhum chamado.'])); return; }
+    tickets.forEach(function (t) { list.appendChild(ticketRow_(t, function () { openTicketDetail_(t.id, 'tickets'); })); });
+  }
+
+  /* ============================================================
+     Fila do analista
+     ============================================================ */
+  function renderAnalyst(root) {
+    var av = state.analystView;
+    var heading = el('h2', { style: 'margin:0 0 12px; font-size:16px;' }, ['Fila do analista']);
+
+    var tabButtons = {};
+    var tabsRow = el('div', { class: 'toolbar' });
+    ['inbox', 'mine', 'all'].forEach(function (mode) {
+      var label = mode === 'inbox' ? 'Caixa de entrada' : mode === 'mine' ? 'Meus atendimentos' : 'Todos os chamados';
+      var btn = el('button', { class: 'chip', onclick: function () { av.mode = mode; updateTabsUI(); refreshList(); } }, [label]);
+      tabButtons[mode] = btn;
+      tabsRow.appendChild(btn);
+    });
+    function updateTabsUI() { Object.keys(tabButtons).forEach(function (mode) { tabButtons[mode].classList.toggle('active', av.mode === mode); }); }
+    updateTabsUI();
+
+    var overdueChip = el('button', { class: 'chip' + (av.overdue ? ' active' : ''), onclick: function () { av.overdue = !av.overdue; overdueChip.classList.toggle('active', av.overdue); refreshList(); } }, ['🔴 Atrasados']);
+    var pendingChip = el('button', { class: 'chip' + (av.pending ? ' active' : ''), onclick: function () { av.pending = !av.pending; pendingChip.classList.toggle('active', av.pending); refreshList(); } }, ['Pendente interação do analista']);
+    var searchInput = el('input', {
+      type: 'text', style: 'max-width:260px;', placeholder: 'Buscar por protocolo, matrícula, colaborador ou assunto...', value: av.q,
+      oninput: function (ev) { av.q = ev.target.value; scheduleAnalystSearch_(refreshList); }
+    });
+    var statusSelect = el('select', { style: 'max-width:200px;', onchange: function (ev) { av.status = ev.target.value; refreshList(); } },
+      [el('option', { value: '' }, ['Todos os status'])].concat(Object.keys(STATUS_LABEL).map(function (s) {
+        var opt = el('option', { value: s }, [STATUS_LABEL[s]]);
+        if (s === av.status) opt.setAttribute('selected', 'selected');
+        return opt;
+      })));
+    var filterRow = el('div', { class: 'toolbar' }, [overdueChip, pendingChip, searchInput, statusSelect]);
+
+    var list = el('div', { class: 'stack' });
+
+    root.appendChild(heading);
+    root.appendChild(tabsRow);
+    root.appendChild(filterRow);
+    root.appendChild(list);
+
+    async function refreshList() {
+      list.innerHTML = '';
+      list.appendChild(el('p', { class: 'loading' }, ['Carregando...']));
+      var filters = { unassigned: av.mode === 'inbox', mine: av.mode === 'mine', status: av.status, overdue: av.overdue, pendingAnalyst: av.pending, q: av.q };
+      var tickets = await call('listTickets', filters);
+      list.innerHTML = '';
+      if (tickets.length === 0) {
+        list.appendChild(el('p', { class: 'empty' }, [av.mode === 'inbox' ? 'Caixa de entrada vazia — tudo distribuído!' : 'Nenhum chamado encontrado.']));
+        return;
+      }
+      tickets.forEach(function (t) { list.appendChild(ticketRow_(t, function () { openTicketDetail_(t.id, 'analyst'); })); });
+    }
+    refreshList();
+  }
+
+  var analystSearchTimer_ = null;
+  function scheduleAnalystSearch_(fn) {
+    clearTimeout(analystSearchTimer_);
+    analystSearchTimer_ = setTimeout(fn, 350);
+  }
+
+  /* ============================================================
+     Detalhe / atendimento do chamado
+     ============================================================ */
+  async function openTicketDetail_(id, fromView) {
+    var root = document.getElementById('view');
+    root.innerHTML = '';
+    root.appendChild(el('p', { class: 'loading' }, ['Carregando chamado...']));
+    try {
+      var detail = await call('getTicketDetail', id);
+      await renderTicketDetail(root, detail, fromView);
+    } catch (e) {
+      root.innerHTML = '';
+      root.appendChild(el('p', { class: 'empty' }, ['Erro ao carregar chamado: ' + errorMessage(e)]));
+    }
+  }
+
+  function drawThread_(container, history) {
+    container.innerHTML = '';
+    history.forEach(function (h) {
+      var mine = h.role === 'analista';
+      var bubbleStyle = h.internal
+        ? 'background:var(--warning-tint); color:var(--warning-ink); border:1px dashed color-mix(in srgb, var(--warning) 55%, transparent);'
+        : (mine ? 'background:var(--brand-strong); color:#fff;' : 'background:var(--line-soft); color:var(--ink);');
+      container.appendChild(el('div', { style: 'max-width:85%;' + (mine ? ' margin-left:auto;' : '') }, [
+        el('div', { style: 'font-size:11px; color:var(--ink-soft); margin-bottom:3px;' + (mine ? ' text-align:right;' : '') },
+          [h.author + (h.internal ? ' 🔒 nota interna' : '') + ' · ' + formatDate_(h.at)]),
+        el('div', { style: 'padding:9px 12px; border-radius:12px; font-size:13px; white-space:pre-wrap; ' + bubbleStyle }, [h.body])
+      ]));
+    });
+  }
+
+  function buildComposer_(t, isAnalyst, onDone) {
+    var mode = 'publica';
+    var box = el('div', { class: 'composer' });
+    var textarea = el('textarea', { rows: 4, placeholder: 'Escreva sua mensagem...' });
+    var modeRow = null, statusSelect = null;
+
+    if (isAnalyst) {
+      var btnPublic = el('button', { class: 'active', onclick: function () { mode = 'publica'; applyMode(); } }, ['Responder ao colaborador']);
+      var btnInternal = el('button', { onclick: function () { mode = 'interna'; applyMode(); } }, ['🔒 Nota interna']);
+      modeRow = el('div', { class: 'mode-row' }, [btnPublic, btnInternal]);
+      box.appendChild(modeRow);
+
+      var cannedSelect = el('select', {
+        style: 'max-width:220px;', onchange: function (ev) {
+          var id = ev.target.value;
+          ev.target.value = '';
+          var chosen = (cannedSelect._data || []).filter(function (c) { return c.id === id; })[0];
+          if (chosen) textarea.value = textarea.value.trim() ? textarea.value + '\n\n' + chosen.content : chosen.content;
+        }
+      });
+      var cannedManagerBox = el('div', { style: 'display:none; margin-bottom:8px; border:1px solid var(--line); border-radius:8px; padding:10px; background:var(--paper);' });
+      var cannedManagerBtn = el('button', {
+        class: 'btn ghost', style: 'font-size:12px;', onclick: function () {
+          var willShow = cannedManagerBox.style.display === 'none';
+          cannedManagerBox.style.display = willShow ? 'block' : 'none';
+          cannedManagerBtn.textContent = willShow ? 'Fechar gerenciador' : 'Gerenciar respostas padrão';
+        }
+      }, ['Gerenciar respostas padrão']);
+      box.appendChild(el('div', { style: 'display:flex; gap:8px; align-items:center; margin-bottom:8px; flex-wrap:wrap;' }, [cannedSelect, cannedManagerBtn]));
+      box.appendChild(cannedManagerBox);
+      loadCannedResponses_(t.department, cannedSelect, cannedManagerBox);
+    }
+
+    box.appendChild(textarea);
+
+    var footer = el('div', { style: 'display:flex; justify-content:space-between; align-items:center; gap:8px; margin-top:8px; flex-wrap:wrap;' });
+    var statusWrap = null;
+    if (isAnalyst) {
+      statusSelect = el('select', { style: 'max-width:200px;' }, Object.keys(STATUS_LABEL).filter(function (s) { return s !== 'encerrado'; }).map(function (s) {
+        var opt = el('option', { value: s }, [STATUS_LABEL[s]]);
+        if (s === 'aguardando_usuario') opt.setAttribute('selected', 'selected');
+        return opt;
+      }));
+      statusWrap = el('label', { style: 'display:flex; align-items:center; gap:6px; font-size:11.5px; color:var(--ink-soft);' }, ['Ao enviar, marcar como', statusSelect]);
+      footer.appendChild(statusWrap);
+    } else {
+      footer.appendChild(el('span', {}, ['']));
+    }
+    var sendBtn = el('button', { class: 'btn primary', onclick: function () { send(); } }, ['Enviar']);
+    footer.appendChild(sendBtn);
+    box.appendChild(footer);
+
+    function applyMode() {
+      var internal = mode === 'interna';
+      box.className = 'composer' + (internal ? ' internal' : '');
+      modeRow.children[0].className = internal ? '' : 'active';
+      modeRow.children[1].className = internal ? 'active' : '';
+      textarea.placeholder = internal ? 'Nota interna — só o time de atendimento vê.' : 'Escreva a resposta que o colaborador vai receber...';
+      sendBtn.textContent = internal ? 'Salvar nota interna' : 'Enviar resposta';
+      if (statusWrap) statusWrap.style.display = internal ? 'none' : 'flex';
+    }
+    if (isAnalyst) applyMode();
+
+    async function send() {
+      var body = textarea.value.trim();
+      if (!body) return;
+      sendBtn.disabled = true;
+      try {
+        var isInternal = isAnalyst && mode === 'interna';
+        var newStatus = (isAnalyst && !isInternal) ? statusSelect.value : null;
+        await call('addComment', t.id, body, isInternal, newStatus);
+        onDone();
+      } catch (e) {
+        alert('Não foi possível enviar: ' + errorMessage(e));
+        sendBtn.disabled = false;
+      }
+    }
+    return box;
+  }
+
+  async function loadCannedResponses_(department, selectEl, managerBox) {
+    var responses = await call('listCannedResponses', department);
+    selectEl._data = responses;
+    selectEl.innerHTML = '';
+    selectEl.appendChild(el('option', { value: '', disabled: 'disabled', selected: 'selected' }, ['Inserir resposta padrão...']));
+    responses.forEach(function (r) { selectEl.appendChild(el('option', { value: r.id }, [r.title])); });
+
+    managerBox.innerHTML = '';
+    responses.forEach(function (r) {
+      managerBox.appendChild(el('div', { style: 'display:flex; justify-content:space-between; gap:8px; font-size:12px; margin-bottom:4px;' }, [
+        el('span', {}, [r.title + (r.department ? '' : ' (todas as filas)')]),
+        el('button', {
+          class: 'btn ghost', style: 'color:var(--critical-ink); font-size:11.5px; padding:2px 6px;',
+          onclick: async function () { await call('deleteCannedResponse', r.id, department); loadCannedResponses_(department, selectEl, managerBox); }
+        }, ['Remover'])
+      ]));
+    });
+    var titleInput = el('input', { type: 'text', placeholder: 'Título', style: 'margin-top:6px;' });
+    var contentArea = el('textarea', { rows: 2, placeholder: 'Texto da resposta padrão...' });
+    var genericCheck = el('input', { type: 'checkbox' });
+    managerBox.appendChild(titleInput);
+    managerBox.appendChild(contentArea);
+    managerBox.appendChild(el('div', { style: 'display:flex; justify-content:space-between; align-items:center; gap:8px; margin-top:6px;' }, [
+      el('label', { style: 'display:flex; gap:6px; align-items:center; font-size:11px; color:var(--ink-soft);' }, [genericCheck, 'Disponível em todas as filas']),
+      el('button', {
+        class: 'btn', style: 'font-size:12px;',
+        onclick: async function () {
+          var title = titleInput.value.trim(), content = contentArea.value.trim();
+          if (!title || !content) return;
+          await call('createCannedResponse', title, content, genericCheck.checked ? null : department);
+          loadCannedResponses_(department, selectEl, managerBox);
+        }
+      }, ['Salvar'])
+    ]));
+  }
+
+  function buildAtendimentoPanel_(t, onDone) {
+    var box = el('div', { class: 'card' });
+    box.appendChild(el('h3', { style: 'margin:0 0 8px; font-size:13px;' }, ['Atendimento']));
+    box.appendChild(el('p', { style: 'margin:0 0 8px; font-size:11.5px; color:var(--ink-soft);' },
+      ['Responsável atual: ', el('b', { style: 'color:var(--ink);' }, [t.assignedTo || 'ninguém — na caixa de entrada geral'])]));
+    box.appendChild(el('button', {
+      class: 'btn', style: 'width:100%; margin-bottom:10px;',
+      onclick: async function () { try { await call('assumeTicket', t.id); onDone(); } catch (e) { alert(errorMessage(e)); } }
+    }, ['Assumir para mim']));
+
+    box.appendChild(el('label', { class: 'field' }, [el('span', {}, ['Status']),
+      el('select', {
+        onchange: async function (ev) { try { await call('changeStatus', t.id, ev.target.value); onDone(); } catch (e) { alert(errorMessage(e)); } }
+      }, Object.keys(STATUS_LABEL).filter(function (s) { return s !== 'encerrado'; }).map(function (s) {
+        var opt = el('option', { value: s }, [STATUS_LABEL[s]]);
+        if (s === t.status) opt.setAttribute('selected', 'selected');
+        return opt;
+      }))]));
+
+    box.appendChild(el('label', { class: 'field' }, [el('span', {}, ['Prioridade (recalcula o prazo)']),
+      el('select', {
+        onchange: async function (ev) { try { await call('changePriority', t.id, ev.target.value); onDone(); } catch (e) { alert(errorMessage(e)); } }
+      }, Object.keys(PRIORITY_LABEL).map(function (p) {
+        var opt = el('option', { value: p }, [PRIORITY_LABEL[p]]);
+        if (p === t.priority) opt.setAttribute('selected', 'selected');
+        return opt;
+      }))]));
+    return box;
+  }
+
+  function buildTransferPanel_(t, onDone) {
+    var box = el('div', { class: 'card' });
+    box.appendChild(el('h3', { style: 'margin:0 0 8px; font-size:13px;' }, ['Transferir chamado']));
+    var analystSelect = el('select', {});
+    var deptSelect = el('select', {}, state.departments.map(function (d) {
+      var opt = el('option', { value: d.name }, [d.name]);
+      if (d.name === t.department) opt.setAttribute('selected', 'selected');
+      return opt;
+    }));
+    var reasonInput = el('input', { type: 'text', placeholder: 'Motivo (opcional)' });
+    var transferBtn = el('button', { class: 'btn primary', style: 'width:100%; margin-top:4px;', disabled: 'disabled' }, ['Transferir']);
+
+    function checkChanged() { transferBtn.disabled = !(analystSelect.value !== (t.assignedTo || '') || deptSelect.value !== t.department); }
+    analystSelect.addEventListener('change', checkChanged);
+    deptSelect.addEventListener('change', checkChanged);
+    transferBtn.addEventListener('click', async function () {
+      try {
+        await call('transferTicket', t.id, analystSelect.value || null, deptSelect.value, reasonInput.value.trim() || null);
+        onDone();
+      } catch (e) { alert(errorMessage(e)); }
+    });
+
+    box.appendChild(el('label', { class: 'field' }, [el('span', {}, ['Novo analista responsável']), analystSelect]));
+    box.appendChild(el('label', { class: 'field' }, [el('span', {}, ['Fila']), deptSelect]));
+    box.appendChild(el('label', { class: 'field' }, [el('span', {}, ['Motivo']), reasonInput]));
+    box.appendChild(transferBtn);
+    loadAnalystsInto_(analystSelect, t.assignedTo);
+    return box;
+  }
+
+  async function loadAnalystsInto_(selectEl, currentAssignee) {
+    var analysts = await call('getAnalysts');
+    selectEl.innerHTML = '';
+    selectEl.appendChild(el('option', { value: '' }, ['Caixa de entrada geral (sem analista)']));
+    analysts.forEach(function (a) {
+      var opt = el('option', { value: a.email }, [a.name + ' (' + a.email + ')']);
+      if (a.email === currentAssignee) opt.setAttribute('selected', 'selected');
+      selectEl.appendChild(opt);
+    });
+  }
+
+  function buildAttachmentsPanel_(t, attachments, onDone) {
+    var box = el('div', { class: 'card' });
+    box.appendChild(el('h3', { style: 'margin:0 0 8px; font-size:13px;' }, ['Anexos']));
+    if (attachments.length === 0) {
+      box.appendChild(el('p', { style: 'margin:0 0 8px; font-size:11.5px; color:var(--ink-soft);' }, ['Nenhum anexo.']));
+    } else {
+      attachments.forEach(function (a) {
+        box.appendChild(el('div', {}, [el('a', { href: a.url, target: '_blank', style: 'font-size:12px; color:var(--brand-ink);' }, ['📎 ' + a.name])]));
+      });
+    }
+    var fileInput = el('input', { type: 'file', style: 'margin-top:8px;' });
+    var uploadBtn = el('button', {
+      class: 'btn', style: 'margin-top:6px; width:100%;',
+      onclick: async function () {
+        var file = fileInput.files[0];
+        if (!file) return;
+        uploadBtn.disabled = true;
+        try {
+          var base64 = await readFileAsBase64_(file);
+          await call('uploadAttachment', t.id, file.name, file.type || 'application/octet-stream', base64);
+          onDone();
+        } catch (e) { alert('Falha ao anexar: ' + errorMessage(e)); uploadBtn.disabled = false; }
+      }
+    }, ['Anexar']);
+    box.appendChild(fileInput);
+    box.appendChild(uploadBtn);
+    return box;
+  }
+
+  async function buildClosePanel_(t, onDone) {
+    var reasons = await call('getClosureReasons', t.id);
+    var box = el('div', { class: 'card' });
+    box.appendChild(el('h3', { style: 'margin:0 0 8px; font-size:13px;' }, ['Encerrar chamado']));
+    if (reasons.length === 0) {
+      box.appendChild(el('p', { style: 'margin:0; font-size:11.5px; color:var(--ink-soft);' }, ['Nenhum motivo de encerramento disponível para você neste chamado.']));
+      return box;
+    }
+    var current = reasons[0];
+    var messageArea = el('textarea', { rows: 3 });
+    messageArea.value = current.defaultMessage;
+    var edited = false;
+    messageArea.addEventListener('input', function () { edited = true; });
+    var reasonSelect = el('select', {
+      onchange: function (ev) {
+        current = reasons.filter(function (r) { return r.value === ev.target.value; })[0];
+        if (!edited) messageArea.value = current.defaultMessage;
+      }
+    }, reasons.map(function (r) { return el('option', { value: r.value }, [r.label]); }));
+    box.appendChild(el('label', { class: 'field' }, [el('span', {}, ['Motivo *']), reasonSelect]));
+    box.appendChild(el('label', { class: 'field' }, [el('span', {}, ['Mensagem para o colaborador']), messageArea]));
+    var closeBtn = el('button', {
+      class: 'btn primary', style: 'width:100%;',
+      onclick: async function () {
+        closeBtn.disabled = true;
+        try { await call('closeTicket', t.id, current.value, messageArea.value.trim()); onDone(); }
+        catch (e) { alert('Não foi possível encerrar: ' + errorMessage(e)); closeBtn.disabled = false; }
+      }
+    }, ['Encerrar chamado']);
+    box.appendChild(closeBtn);
+    return box;
+  }
+
+  async function renderTicketDetail(root, detail, fromView) {
+    root.innerHTML = '';
+    var t = detail.ticket;
+    root.appendChild(el('button', { class: 'btn ghost', style: 'margin-bottom:12px;', onclick: function () { setView(fromView); } }, ['← Voltar']));
+
+    root.appendChild(el('div', { class: 'card' }, [
+      el('div', { style: 'display:flex; justify-content:space-between; flex-wrap:wrap; gap:10px;' }, [
+        el('div', {}, [
+          el('p', { class: 'mono', style: 'margin:0; font-size:11.5px; color:var(--ink-soft);' }, [t.protocol]),
+          el('h2', { style: 'margin:2px 0;' }, [t.subject]),
+          el('p', { style: 'margin:0; font-size:11.5px; color:var(--ink-soft);' }, [t.department + ' · aberto em ' + formatDate_(t.openedAt)])
+        ]),
+        el('div', { style: 'display:flex; gap:6px; flex-wrap:wrap; align-self:flex-start;' }, [
+          el('span', { class: 'pill ' + PRIORITY_CLASS[t.priority] }, [PRIORITY_LABEL[t.priority]]),
+          el('span', { class: 'pill ' + STATUS_CLASS[t.status] }, [STATUS_LABEL[t.status]]),
+          el('span', { class: 'pill ' + slaState_(t) }, [slaLabel_(t)])
+        ])
+      ])
+    ]));
+
+    var mainCol = el('div', { class: 'stack' });
+    var sideCol = el('div', { class: 'stack' });
+    root.appendChild(el('div', { class: 'grid-2' }, [mainCol, sideCol]));
+
+    var thread = el('div', { class: 'stack' });
+    mainCol.appendChild(el('div', { class: 'card' }, [thread]));
+    drawThread_(thread, detail.history);
+
+    var isAnalyst = state.user.role === 'analyst';
+    mainCol.appendChild(buildComposer_(t, isAnalyst, function () { openTicketDetail_(t.id, fromView); }));
+
+    sideCol.appendChild(el('div', { class: 'card' }, [
+      el('h3', { style: 'margin:0 0 8px; font-size:13px;' }, ['Solicitante']),
+      el('p', { style: 'margin:0; font-weight:700;' }, [t.requesterName]),
+      el('p', { style: 'margin:0; font-size:11.5px; color:var(--ink-soft);' }, [t.requesterEmail]),
+      t.matricula ? el('p', { style: 'margin:0; font-size:11.5px; color:var(--ink-soft);' }, ['Matrícula ' + t.matricula]) : null,
+      el('hr', { style: 'border:none; border-top:1px solid var(--line-soft); margin:8px 0;' }),
+      el('p', { style: 'margin:0; font-size:11.5px;' }, ['Prazo: ' + (t.slaDueAt ? formatDate_(t.slaDueAt) : '—')])
+    ]));
+
+    if (isAnalyst) {
+      sideCol.appendChild(buildAtendimentoPanel_(t, function () { openTicketDetail_(t.id, fromView); }));
+      sideCol.appendChild(buildTransferPanel_(t, function () { openTicketDetail_(t.id, fromView); }));
+    }
+
+    sideCol.appendChild(buildAttachmentsPanel_(t, detail.attachments, function () { openTicketDetail_(t.id, fromView); }));
+
+    if (t.status !== 'encerrado') {
+      sideCol.appendChild(await buildClosePanel_(t, function () { openTicketDetail_(t.id, fromView); }));
+    } else {
+      sideCol.appendChild(el('div', { class: 'card' }, [
+        el('h3', { style: 'margin:0 0 6px; font-size:13px;' }, ['Encerrado']),
+        el('p', { style: 'margin:0; font-size:11.5px; color:var(--ink-soft);' }, [(t.closureReason || '') + ' · ' + (t.closedAt ? formatDate_(t.closedAt) : '')])
+      ]));
+    }
+  }
+
+  /* ============================================================
+     Dashboard
+     ============================================================ */
+  async function renderDashboard(root) {
+    root.appendChild(el('h2', { style: 'margin:0 0 12px; font-size:16px;' }, ['Dashboard']));
+    var stats = await call('getDashboardStats');
+    root.appendChild(el('div', { class: 'stat-grid' }, [
+      statCard_('Total de chamados', stats.total),
+      statCard_('Em aberto', stats.abertos),
+      statCard_('Atrasados', stats.atrasados)
+    ]));
+    var deptCard = el('div', { class: 'card' }, [el('h3', { style: 'margin:0 0 10px; font-size:14px;' }, ['Chamados por fila'])]);
+    Object.keys(stats.porDepartamento)
+      .sort(function (a, b) { return stats.porDepartamento[b] - stats.porDepartamento[a]; })
+      .forEach(function (dept) {
+        deptCard.appendChild(el('div', { style: 'display:flex; justify-content:space-between; font-size:12.5px; padding:4px 0; border-bottom:1px solid var(--line-soft);' }, [
+          el('span', {}, [dept]), el('span', { class: 'mono' }, [String(stats.porDepartamento[dept])])
+        ]));
+      });
+    root.appendChild(deptCard);
+  }
+
+  function statCard_(label, value) {
+    return el('div', { class: 'card stat' }, [el('div', { class: 'value' }, [String(value)]), el('div', { class: 'label' }, [label])]);
+  }
+
+  window.addEventListener('DOMContentLoaded', boot);
+})();
+</script>

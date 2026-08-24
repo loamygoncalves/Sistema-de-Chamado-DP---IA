@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <?!= include('Styles'); ?>
+</head>
+<body>
+  <div id="topbar">
+    <div>
+      <h1>BEEP AI Service Desk</h1>
+      <div class="sub">Protótipo em Google Apps Script</div>
+    </div>
+    <div class="user-badge">
+      <b id="userName">Carregando...</b>
+      <span id="userEmail"></span>
+      <div><span class="role-pill" id="userRole"></span></div>
+    </div>
+  </div>
+  <nav id="tabs"></nav>
+  <main id="view">
+    <p class="loading">Carregando BEEP AI Service Desk...</p>
+  </main>
+  <?!= include('ClientScript'); ?>
+</body>
+</html>
