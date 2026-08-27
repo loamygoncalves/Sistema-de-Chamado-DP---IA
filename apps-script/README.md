@@ -9,9 +9,12 @@ para manter — só uma cópia da planilha e um deploy de app da Web.
 ## O que este protótipo tem
 
 - Chat com IA (casador léxico de FAQs, igual ao motor de decisão do sistema
-  real) com abertura de chamado guiada: nome/matrícula pré-preenchidos,
-  escolha da fila, resumo do caso escrito pela IA para o analista confirmar,
-  e anexo de arquivo (guardado no Google Drive).
+  real) com memória de conversa de verdade — perguntas de acompanhamento
+  ("e isso muda se eu for autônomo?") levam em conta o que já foi dito,
+  até o colaborador clicar em "Encerrar conversa" para começar do zero em
+  outro assunto — e abertura de chamado guiada: nome/matrícula
+  pré-preenchidos, escolha da fila, resumo do caso escrito pela IA para o
+  analista confirmar, e anexo de arquivo (guardado no Google Drive).
 - Fila do analista com caixa de entrada geral, aba "Meus atendimentos",
   busca e filtros de atrasados / pendente interação do analista.
 - Status automático: nasce em "Em triagem", vira "Em atendimento" ao ser
