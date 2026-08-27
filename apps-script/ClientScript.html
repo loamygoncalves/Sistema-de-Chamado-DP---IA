@@ -91,10 +91,30 @@
     departments: [],
     view: 'chat',
     messages: [],
-    lastTurn: null,
     ticketForm: null,
     analystView: { mode: 'inbox', status: '', overdue: false, pending: false, q: '' }
   };
+
+  /** Histórico da conversa (turnos de verdade, {role, content}) até a
+   * mensagem `beforeMessage` — ou a conversa inteira se omitido. Usado para
+   * a IA responder considerando o que já foi dito, não cada pergunta como
+   * se fosse a primeira. */
+  function conversationHistory_(beforeMessage) {
+    var messages = state.messages;
+    if (beforeMessage) {
+      var idx = messages.indexOf(beforeMessage);
+      if (idx !== -1) {
+        // Recua até o turno do usuário que gerou esta resposta, pra devolver
+        // só o que veio ANTES dele (a pergunta atual vai separada).
+        var userIdx = idx;
+        while (userIdx > 0 && messages[userIdx].role !== 'user') userIdx--;
+        messages = messages.slice(0, userIdx);
+      }
+    }
+    return messages
+      .filter(function (m) { return (m.role === 'user' || m.role === 'assistant') && m.content; })
+      .map(function (m) { return { role: m.role, content: m.content }; });
+  }
 
   async function boot() {
     try {
@@ -144,9 +164,14 @@
      ============================================================ */
   function renderChat(root) {
     root.appendChild(el('div', { class: 'card' }, [
-      el('h2', { style: 'margin:0 0 10px; font-size:16px;' }, ['Pergunte à IA do BEEP']),
-      el('p', { style: 'margin:0 0 10px; font-size:12px; color:var(--ink-soft);' }, ['A IA consulta a base de conhecimento antes de sugerir abrir um chamado.']),
-      el('div', { id: 'chatLog' }),
+      el('div', { style: 'display:flex; justify-content:space-between; align-items:flex-start; gap:10px; flex-wrap:wrap;' }, [
+        el('div', {}, [
+          el('h2', { style: 'margin:0 0 4px; font-size:16px;' }, ['Pergunte à IA do BEEP']),
+          el('p', { style: 'margin:0; font-size:12px; color:var(--ink-soft);' }, ['A IA consulta a base de conhecimento antes de sugerir abrir um chamado, e lembra da conversa até você encerrá-la.'])
+        ]),
+        el('button', { class: 'btn', style: 'font-size:12px; padding:6px 10px; flex-shrink:0;', onclick: endConversation }, ['Encerrar conversa'])
+      ]),
+      el('div', { id: 'chatLog', style: 'margin-top:10px;' }),
       el('form', { id: 'chatForm', style: 'display:flex; gap:8px; margin-top:10px;' }, [
         el('input', { type: 'text', id: 'chatInput', placeholder: 'Digite sua dúvida...' }),
         el('button', { class: 'btn primary', type: 'submit' }, ['Enviar'])
@@ -160,6 +185,17 @@
       input.value = '';
       askQuestion(val);
     });
+    drawChatLog();
+  }
+
+  /** Encerra a conversa atual — a IA "esquece" tudo o que foi dito até
+   * aqui. Pedido explícito: se o colaborador quiser mudar de assunto, ele
+   * consegue limpar o histórico em vez de arrastar o contexto anterior
+   * (e a próxima pergunta não herda mais nada da conversa encerrada). */
+  function endConversation() {
+    if (state.messages.length === 0) return;
+    state.messages = [];
+    state.ticketForm = null;
     drawChatLog();
   }
 
@@ -219,15 +255,17 @@
   }
 
   async function askQuestion(query) {
+    // Captura a conversa ANTES de empilhar a pergunta atual — é esse
+    // histórico que vai junto pro servidor, pra IA responder com o fio da
+    // conversa em vez de tratar cada pergunta isolada.
+    var history = conversationHistory_();
     state.messages.push({ role: 'user', content: query });
     state.messages.push({ role: 'pending' });
     drawChatLog();
-    var historyText = state.lastTurn ? (state.lastTurn.question + ' ' + state.lastTurn.answer) : '';
     try {
-      var result = await call('askAi', query, historyText);
+      var result = await call('askAi', query, history);
       state.messages.pop();
       state.messages.push({ role: 'assistant', content: result.answer, confidence: result.confidence, decision: result.decision, source: result.source, query: query });
-      state.lastTurn = { question: query, answer: result.answer };
     } catch (e) {
       state.messages.pop();
       state.messages.push({ role: 'assistant', content: 'Ocorreu um erro ao consultar a IA: ' + errorMessage(e), confidence: 0, decision: 'auto_ticket', source: null, query: query });
@@ -281,8 +319,8 @@
           tf.file = fileInput.files[0] || null;
           tf.loading = true; drawChatLog();
           try {
-            var previousQuestion = (state.lastTurn && state.lastTurn.question !== m.query) ? state.lastTurn.question : null;
-            tf.description = await call('draftTicketContext', m.query, m.source ? m.source.question : null, previousQuestion);
+            var history = conversationHistory_(m);
+            tf.description = await call('draftTicketContext', m.query, m.source ? m.source.question : null, history);
             tf.subject = deriveTicketSubject_(m);
             tf.step = 'review';
           } catch (e) {
