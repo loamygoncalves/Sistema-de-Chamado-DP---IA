@@ -112,6 +112,24 @@ function handleAdminRoute_(action, e) {
     return ContentService.createTextOutput(setStepImages_(faq, ids));
   }
 
+  // Diagnóstico temporário: tenta ler UMA imagem do Drive e devolve o erro
+  // real (autorização pendente vs. arquivo inacessível), em vez de engolir
+  // a exceção como getStepImage faz. Remover depois de resolver o passo a
+  // passo com imagem.
+  if (action === 'diag') {
+    var diagId = extractDriveId_(e.parameter.id || '');
+    if (!diagId) return ContentService.createTextOutput('Passe ?admin=diag&id=<ID do Drive>.');
+    try {
+      var arquivo = DriveApp.getFileById(diagId);
+      var b = arquivo.getBlob();
+      return ContentService.createTextOutput(
+        'OK: nome="' + arquivo.getName() + '" tipo=' + b.getContentType() + ' bytes=' + b.getBytes().length
+      );
+    } catch (err) {
+      return ContentService.createTextOutput('ERRO: ' + err);
+    }
+  }
+
   return ContentService.createTextOutput('Ação desconhecida.');
 }
 
