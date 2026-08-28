@@ -238,6 +238,13 @@
         el('span', { class: 'pill ' + decisionCls }, [decisionLabel]),
         el('span', { class: 'mono', style: 'font-size:11.5px; color:var(--ink-soft);' }, [confPct + '% de confiança'])
       ]));
+      // Passo a passo ilustrado: o texto de cada etapa entra na hora e a
+      // tela correspondente vai preenchendo em seguida, para a resposta
+      // nunca ficar esperando imagem carregar.
+      if (m.steps && m.steps.length) {
+        wrap.appendChild(renderSteps_(m.steps));
+      }
+
       if (m.source && m.decision !== 'clarify') {
         wrap.appendChild(el('p', { style: 'font-size:11.5px; color:var(--ink-soft); margin:6px 0 0;' }, ['Fonte: ' + m.source.department + ' — "' + m.source.question + '"']));
       }
@@ -291,6 +298,61 @@
     log.scrollTop = log.scrollHeight;
   }
 
+  /** Cache das imagens já buscadas — reabrir a mesma conversa (ou repetir
+   * o passo a passo) não deve bater no Drive de novo. */
+  var stepImageCache_ = {};
+
+  function renderSteps_(steps) {
+    var box = el('div', { style: 'margin-top:10px; display:flex; flex-direction:column; gap:12px;' });
+    steps.forEach(function (step) {
+      var card = el('div', { style: 'border-left:3px solid var(--brand); padding-left:10px;' }, [
+        el('div', { style: 'font-weight:700; font-size:13px; color:var(--brand-ink);' },
+          [String(step.order) + '. ' + step.title]),
+        step.text ? el('div', { style: 'font-size:13px; margin-top:3px; white-space:pre-wrap;' }, [step.text]) : null
+      ]);
+      if (step.imageId) {
+        var slot = el('div', { style: 'margin-top:6px;' }, [
+          el('span', { style: 'font-size:11.5px; color:var(--ink-soft);' }, ['carregando a tela...'])
+        ]);
+        card.appendChild(slot);
+        loadStepImage_(step, slot);
+      }
+      box.appendChild(card);
+    });
+    return box;
+  }
+
+  async function loadStepImage_(step, slot) {
+    try {
+      var dataUri = stepImageCache_[step.imageId];
+      if (!dataUri) {
+        dataUri = await call('getStepImage', step.imageId);
+        stepImageCache_[step.imageId] = dataUri;
+      }
+      slot.innerHTML = '';
+      if (!dataUri) return; // imagem indisponível: a etapa vale pelo texto
+      // Miniatura para não empurrar a conversa toda pra baixo; clicar abre
+      // a tela em tamanho real, que é quando a pessoa quer ver detalhe.
+      var img = el('img', {
+        src: dataUri, alt: 'Passo ' + step.order + ': ' + step.title,
+        style: 'max-width:100%; width:360px; border:1px solid var(--line); border-radius:8px; cursor:zoom-in; display:block;'
+      });
+      img.addEventListener('click', function () { openImageOverlay_(dataUri); });
+      slot.appendChild(img);
+    } catch (e) {
+      slot.innerHTML = '';
+    }
+  }
+
+  function openImageOverlay_(dataUri) {
+    var overlay = el('div', {
+      style: 'position:fixed; inset:0; background:rgba(0,0,0,.8); display:flex; align-items:center; ' +
+        'justify-content:center; z-index:999; padding:20px; cursor:zoom-out;'
+    }, [el('img', { src: dataUri, style: 'max-width:100%; max-height:100%; border-radius:6px;' })]);
+    overlay.addEventListener('click', function () { document.body.removeChild(overlay); });
+    document.body.appendChild(overlay);
+  }
+
   async function askQuestion(query) {
     // Captura a conversa ANTES de empilhar a pergunta atual — é esse
     // histórico que vai junto pro servidor, pra IA responder com o fio da
@@ -302,7 +364,7 @@
     try {
       var result = await call('askAi', query, history);
       state.messages.pop();
-      state.messages.push({ role: 'assistant', content: result.answer, confidence: result.confidence, decision: result.decision, source: result.source, options: result.options || [], query: query });
+      state.messages.push({ role: 'assistant', content: result.answer, confidence: result.confidence, decision: result.decision, source: result.source, options: result.options || [], steps: result.steps || [], query: query });
     } catch (e) {
       state.messages.pop();
       state.messages.push({ role: 'assistant', content: 'Ocorreu um erro ao consultar a IA: ' + errorMessage(e), confidence: 0, decision: 'auto_ticket', source: null, query: query });

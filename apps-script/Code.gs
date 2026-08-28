@@ -20,6 +20,7 @@ var SHEETS = {
   HISTORICO: 'Historico',
   RESPOSTAS_PADRAO: 'RespostasPadrao',
   FAQS: 'FAQs',
+  PASSOS: 'Passos',
   ANEXOS: 'Anexos'
 };
 
@@ -34,6 +35,10 @@ var HEADERS = {
   Historico: ['ID', 'ChamadoID', 'Autor', 'Papel', 'Interno', 'Mensagem', 'DataHora'],
   RespostasPadrao: ['ID', 'Titulo', 'Conteudo', 'Departamento'],
   FAQs: ['Pergunta', 'Resposta', 'Departamento'],
+  // Passo a passo ilustrado de um FAQ: uma linha por etapa, ligada ao FAQ
+  // pelo texto da Pergunta. Cada etapa tem o SEU texto e a SUA imagem —
+  // uma lista solta de imagens no fim da resposta perderia esse par.
+  Passos: ['Pergunta', 'Ordem', 'Titulo', 'Texto', 'Imagem'],
   Anexos: ['ID', 'ChamadoID', 'NomeArquivo', 'URL', 'EnviadoPor', 'DataHora']
 };
 
@@ -439,6 +444,58 @@ function listAttachments(ticketId) {
   return rowsAsObjects_(sheet_(SHEETS.ANEXOS, HEADERS.Anexos))
     .filter(function (a) { return a.ChamadoID === ticketId; })
     .map(function (a) { return { name: a.NomeArquivo, url: a.URL }; });
+}
+
+/* ============================================================
+   Passo a passo ilustrado
+   ============================================================ */
+
+/** Aceita tanto o ID puro quanto qualquer link do Drive colado pelo time
+ * (`/file/d/ID/view`, `open?id=ID`, ...) — o DP cola o link como veio, sem
+ * precisar saber o que é "ID de arquivo". */
+function extractDriveId_(value) {
+  var text = String(value || '').trim();
+  if (!text) return '';
+  var match = text.match(/[-\w]{25,}/);
+  return match ? match[0] : '';
+}
+
+/** Etapas de um FAQ, em ordem. Devolve só os metadados — a imagem em si é
+ * buscada depois, uma a uma (ver getStepImage), para o texto do passo a
+ * passo aparecer na hora e as telas irem preenchendo em seguida. */
+function getStepsFor(faqQuestion) {
+  var alvo = String(faqQuestion || '').trim().toLowerCase();
+  if (!alvo) return [];
+  return rowsAsObjects_(sheet_(SHEETS.PASSOS, HEADERS.Passos))
+    .filter(function (p) { return String(p.Pergunta).trim().toLowerCase() === alvo; })
+    .sort(function (a, b) { return Number(a.Ordem || 0) - Number(b.Ordem || 0); })
+    .map(function (p) {
+      return {
+        order: Number(p.Ordem || 0), title: String(p.Titulo || ''),
+        text: String(p.Texto || ''), imageId: extractDriveId_(p.Imagem)
+      };
+    });
+}
+
+/**
+ * Entrega a imagem como data URI, lida do Drive pelo próprio script.
+ *
+ * É de propósito que não se use link direto do Drive: assim os prints não
+ * precisam ser compartilhados com ninguém (o script lê como o usuário que
+ * publicou), continuam privados, e não dependem dos endpoints de hotlink
+ * do Google, que são instáveis. Falha nunca quebra a resposta — a etapa
+ * simplesmente aparece sem a tela.
+ */
+function getStepImage(fileId) {
+  var id = extractDriveId_(fileId);
+  if (!id) return '';
+  try {
+    var blob = DriveApp.getFileById(id).getBlob();
+    return 'data:' + blob.getContentType() + ';base64,' + Utilities.base64Encode(blob.getBytes());
+  } catch (e) {
+    Logger.log('Não consegui ler a imagem do passo a passo (' + id + '): ' + e);
+    return '';
+  }
 }
 
 /* ============================================================

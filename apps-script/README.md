@@ -32,6 +32,38 @@ para manter — só uma cópia da planilha e um deploy de app da Web.
 - Encerramento com motivo obrigatório, notificações por e-mail (aberto /
   respondido / finalizado) e um dashboard bem simples.
 
+## Passo a passo com imagens (aba `Passos`)
+
+Um FAQ pode ter um passo a passo ilustrado — texto **e** print de cada
+etapa, como o guia de primeiro acesso ao ADP. As etapas ficam na aba
+`Passos`, uma linha por etapa:
+
+| Pergunta | Ordem | Titulo | Texto | Imagem |
+|---|---|---|---|---|
+| Como faço o primeiro acesso ao portal ADP eXpert? | 1 | Acesse o link | Clique no link exclusivo... | *(link do Drive)* |
+| Como faço o primeiro acesso ao portal ADP eXpert? | 2 | Preencha seus dados... | Informe Nome, Sobrenome... | *(link do Drive)* |
+
+- **`Pergunta`** precisa ser **idêntica** à da aba `FAQs` — é o que liga a
+  etapa ao FAQ.
+- **`Imagem`** aceita o link do Drive como ele vier (`/file/d/ID/view`,
+  `open?id=...`) ou só o ID; o sistema extrai o ID sozinho.
+- Etapa **sem** imagem funciona normalmente — vale pelo texto.
+
+Como adicionar um passo a passo novo:
+1. Suba os prints numa pasta do Drive (a mesma conta que publicou o app,
+   ou compartilhe a pasta com ela).
+2. Crie o FAQ na aba `FAQs`, com um resumo curto na `Resposta`.
+3. Crie uma linha por etapa na aba `Passos`, colando o link do print.
+
+**Escreva o passo a passo em texto também, não só na imagem** — é o texto
+que faz a IA encontrar o FAQ. Print sem texto vira conteúdo invisível
+para a busca.
+
+Dica: redimensione os prints para ~1000px de largura antes de subir. O
+sistema entrega a imagem embutida (o próprio script lê do Drive), então
+os prints **não precisam ser públicos** — ficam privados e visíveis só
+dentro do sistema.
+
 ## O que este protótipo NÃO tem (limitações do Apps Script)
 
 - **Não é um modelo de linguagem (LLM)** — a IA não *gera* texto novo: ela
@@ -69,7 +101,7 @@ time ou rodar num piloto pequeno sem precisar de infraestrutura própria.
 2. Nela, abra **Extensões > Apps Script**.
 3. Apague o `Code.gs` de exemplo e cole o conteúdo de cada arquivo desta
    pasta como um arquivo de mesmo nome no projeto:
-   - `Code.gs`, `SheetService.gs`, `AiService.gs`, `EmailService.gs`, `Setup.gs`
+   - `Code.gs`, `SheetService.gs`, `TextMatch.gs`, `AiService.gs`, `EmailService.gs`, `Setup.gs`
    - `Index.html`, `Styles.html`, `ClientScript.html` (crie como arquivos HTML,
      não `.gs` — use o "+" ao lado de "Arquivos" > HTML)
 4. Em **Configurações do projeto** (ícone de engrenagem), marque **"Mostrar

@@ -271,7 +271,7 @@ function askAi(question, history) {
   if (faqs.length === 0) {
     return {
       answer: 'A base de conhecimento ainda está vazia, então não consigo responder com segurança. Posso abrir um chamado para um analista do DP te ajudar.',
-      decision: 'auto_ticket', confidence: 0, source: null, options: []
+      decision: 'auto_ticket', confidence: 0, source: null, options: [], steps: []
     };
   }
 
@@ -281,7 +281,7 @@ function askAi(question, history) {
   if (intent === 'gratidao' || intent === 'saudacao' || intent === 'despedida' || intent === 'cortesia') {
     return {
       answer: smallTalkAnswer_(intent, question),
-      decision: 'conversa', confidence: 1, source: null, options: []
+      decision: 'conversa', confidence: 1, source: null, options: [], steps: []
     };
   }
 
@@ -297,7 +297,7 @@ function askAi(question, history) {
     return {
       answer: 'Não consegui entender sua mensagem. Pode escrever com outras palavras o que você precisa? ' +
         'Posso ajudar com folha de pagamento, férias, benefícios, ponto, documentos e afins.',
-      decision: 'conversa', confidence: 0, source: null, options: []
+      decision: 'conversa', confidence: 0, source: null, options: [], steps: []
     };
   }
 
@@ -330,7 +330,7 @@ function askAi(question, history) {
   if (ranked.length === 0) {
     return {
       answer: 'Não encontrei nada sobre isso na nossa base de conhecimento, então prefiro não arriscar uma resposta errada. Quer que eu abra um chamado para um analista do DP?',
-      decision: 'auto_ticket', confidence: 0, source: null, options: []
+      decision: 'auto_ticket', confidence: 0, source: null, options: [], steps: []
     };
   }
 
@@ -358,7 +358,7 @@ function askAi(question, history) {
         'ela não detalha esse ponto específico que você está perguntando agora. Para não te dar uma resposta ' +
         'incompleta, o melhor caminho é um analista do DP olhar o seu caso. Quer que eu abra o chamado?',
       decision: 'auto_ticket', confidence: confidence,
-      source: { department: best.faq.Departamento, question: best.faq.Pergunta }, options: []
+      source: { department: best.faq.Departamento, question: best.faq.Pergunta }, options: [], steps: []
     };
   }
 
@@ -366,7 +366,7 @@ function askAi(question, history) {
     return {
       answer: 'Entendi mais ou menos o que você precisa, mas não achei na base algo que responda com segurança — e prefiro não chutar. Quer que eu abra um chamado para um analista do DP olhar seu caso?',
       decision: 'auto_ticket', confidence: confidence,
-      source: { department: best.faq.Departamento, question: best.faq.Pergunta }, options: []
+      source: { department: best.faq.Departamento, question: best.faq.Pergunta }, options: [], steps: []
     };
   }
 
@@ -386,12 +386,15 @@ function askAi(question, history) {
   }
 
   var confident = confidence >= thresholds.auto;
+  // Se este FAQ tiver passo a passo ilustrado, ele vai junto: são as
+  // etapas que realmente tiram a dúvida de um procedimento de tela.
+  var steps = getStepsFor(best.faq.Pergunta);
   return {
     answer: composeAnswer_(best.faq, { confident: confident, isFollowUp: isFollowUp, isCorrection: isCorrection, seed: question }),
     decision: confident ? 'auto_answer' : 'suggest_ticket',
     confidence: confidence,
     source: { department: best.faq.Departamento, question: best.faq.Pergunta },
-    options: []
+    options: [], steps: steps
   };
 }
 

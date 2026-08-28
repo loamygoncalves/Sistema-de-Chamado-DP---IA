@@ -39,6 +39,17 @@ function initializeSpreadsheet() {
     });
   }
 
+  // Passo a passo ilustrado: o FAQ vive na aba FAQs e as etapas na aba
+  // Passos, ligadas pelo texto da Pergunta.
+  var passos = sheet_(SHEETS.PASSOS, HEADERS.Passos);
+  if (passos.getLastRow() < 2) {
+    SEED_PASSOS_.forEach(function (s) {
+      appendObject_(passos, {
+        Pergunta: s.faq, Ordem: s.ordem, Titulo: s.titulo, Texto: s.texto, Imagem: ''
+      });
+    });
+  }
+
   // Só garante que as abas existem — sem dado de exemplo (nascem vazias).
   sheet_(SHEETS.CHAMADOS, HEADERS.Chamados);
   sheet_(SHEETS.HISTORICO, HEADERS.Historico);
@@ -48,8 +59,7 @@ function initializeSpreadsheet() {
     'Planilhas prontas!\n\n' +
     'Antes de divulgar o link do sistema:\n' +
     '1) Edite a aba "Analistas" com os e-mails reais do time de DP.\n' +
-    '2) (Opcional) Em Configurações do projeto > Propriedades do script, defina ANTHROPIC_API_KEY ' +
-    'para respostas mais naturais e resumos de chamado com IA de verdade.\n' +
+    '2) Para um passo a passo com imagens, use a aba "Passos" (ver README).\n' +
     '3) Publique como app da Web (Implantar > Nova implantação).';
   try {
     // SpreadsheetApp.getUi() só funciona quando o script é disparado pela
@@ -85,6 +95,7 @@ var SEED_DEPARTMENTS_ = [
 ];
 
 var SEED_FAQS_ = [
+  { q: 'Como faço o primeiro acesso ao portal ADP eXpert?', a: 'O cadastro é feito em 4 passos, a partir do link exclusivo de registro que a empresa te envia. Importante: esse link é único e pessoal — use e-mail e telefone de uso individual, porque eles são usados para validar a segurança do seu acesso. Veja o passo a passo abaixo com as telas.', dept: 'Ponto' },
   { q: 'Quando e onde recebo meu salário?', a: 'O pagamento ocorre no 5º dia útil de cada mês (o sábado conta como dia útil), exclusivamente nas contas Bradesco ou Next (conta salário ou conta corrente). Para abrir a conta salário online, use o Código de Convênio 180801805 e o CNPJ 28.286.170/0001-01. Para receber em outro banco, solicite a portabilidade salarial diretamente na instituição financeira de sua preferência.', dept: 'Folha de pagamento' },
   { q: 'Como funciona o pagamento do 13º salário?', a: 'O 13º é pago em duas parcelas: a primeira até 30/11, correspondente a 50% do valor total e sem descontos; a segunda até 20/12, já com desconto de INSS e Imposto de Renda.', dept: 'Folha de pagamento' },
   { q: 'Como solicitar férias e o que reduz a quantidade de dias?', a: 'Os gestores devem solicitar até o dia 10 do mês anterior ao mês de gozo, e o depósito ocorre até 2 dias antes do início do período aprovado. Atenção: faltas injustificadas no período aquisitivo de 12 meses reduzem os dias de férias (Art. 130 da CLT) — até 5 faltas mantém os 30 dias corridos; de 6 a 14 faltas reduz para 24 dias; de 15 a 23 faltas para 18 dias; de 24 a 32 faltas para 12 dias; acima de 32 faltas há perda do direito às férias no período.', dept: 'Férias' },
@@ -108,4 +119,19 @@ var SEED_FAQS_ = [
   { q: 'Como enviar um atestado médico por ausência no trabalho?', a: 'Abra o chamado pela plataforma Pipefy (app.pipefy.com/public/form/4qqvxrxk) e aguarde o contato do time de Saúde do Trabalho para dar seguimento ao lançamento do documento.', dept: 'Declarações' },
   { q: 'Quais são as ausências legais previstas e seus prazos?', a: 'Atestado ou declaração de horas: abono do período com documento comprobatório. Licença falecimento: 3 dias consecutivos a partir da data registrada no documento, para ascendentes e descendentes (pais, irmãos, filhos, netos, bisnetos, avós, bisavós). Licença casamento: 5 dias em São Paulo ou 3 dias no Rio de Janeiro e Distrito Federal, a partir da data do documento. Acompanhamento médico familiar: 1 dia por ano para levar filho de até 6 anos ao médico, ou até 6 consultas/exames da companheira durante a gravidez (o documento deve ter nome do colaborador e do dependente, data do atendimento, carimbo e assinatura do médico). Licença paternidade: 5 dias corridos a partir da comprovação da paternidade, conforme a CLT.', dept: 'Declarações' },
   { q: 'Qual a política de home office?', a: 'Modelo híbrido: mínimo de 2 dias presenciais por semana, definidos com o gestor direto. Ajuda de custo de internet é creditada junto ao salário.', dept: 'Declarações' }
+];
+
+
+/** Etapas do guia de primeiro acesso ao ADP eXpert. A coluna Imagem fica
+ * vazia no seed: o time do DP sobe os prints no Drive e cola os links —
+ * ver README. Sem imagem, cada etapa ainda vale pelo texto. */
+var SEED_PASSOS_ = [
+  { faq: 'Como faço o primeiro acesso ao portal ADP eXpert?', ordem: 1, titulo: 'Acesse o link',
+    texto: 'Clique no link exclusivo de registro fornecido pela empresa. Se você recebeu o convite por e-mail, basta clicar em "Inscreva-se agora" — ou usar o link enviado diretamente pela sua liderança/RH.' },
+  { faq: 'Como faço o primeiro acesso ao portal ADP eXpert?', ordem: 2, titulo: 'Preencha seus dados (Etapa 1 de 3)',
+    texto: 'Informe Nome, Sobrenome, CPF e Data de Nascimento. No campo "Número de celular pessoal", coloque seu número com DDD e marque "Sim" para autorizar o recebimento de SMS da ADP — sem isso o código de verificação não chega.' },
+  { faq: 'Como faço o primeiro acesso ao portal ADP eXpert?', ordem: 3, titulo: 'Valide o código (Etapa 2 de 3)',
+    texto: 'Você vai receber um SMS no celular informado no passo anterior. Digite o código no campo "Código de verificação" e clique em Continuar. O código vale por 10 minutos — se expirar, use "Reenviar código".' },
+  { faq: 'Como faço o primeiro acesso ao portal ADP eXpert?', ordem: 4, titulo: 'Crie suas credenciais (Etapa 3 de 3)',
+    texto: 'Defina seu ID de usuário (mínimo de 4 caracteres, sem espaços) e uma senha forte — com letra maiúscula, minúscula, número e símbolo. Marque "Li e aceito os Termos de uso da ADP" e clique em Criar conta.' }
 ];
