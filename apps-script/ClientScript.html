@@ -513,27 +513,11 @@
       })));
     var filterRow = el('div', { class: 'toolbar' }, [overdueChip, pendingChip, searchInput, statusSelect]);
 
-    var debugOut = el('p', { style: 'font-size:11.5px; color:var(--ink-soft);' }, []);
-    var debugBtn = el('button', {
-      class: 'chip', onclick: async function () {
-        debugOut.textContent = 'testando...';
-        try {
-          var comData = await call('debugEchoComData');
-          var semData = await call('debugEchoSemData');
-          debugOut.textContent = 'com data: ' + JSON.stringify(comData) + ' | sem data: ' + JSON.stringify(semData);
-        } catch (e) {
-          debugOut.textContent = 'erro no teste: ' + errorMessage(e);
-        }
-      }
-    }, ['Testar RPC (debug, remover depois)']);
-
     var list = el('div', { class: 'stack' });
 
     root.appendChild(heading);
     root.appendChild(tabsRow);
     root.appendChild(filterRow);
-    root.appendChild(debugBtn);
-    root.appendChild(debugOut);
     root.appendChild(list);
 
     async function refreshList() {
@@ -542,7 +526,6 @@
       try {
         var filters = { unassigned: av.mode === 'inbox', mine: av.mode === 'mine', status: av.status, overdue: av.overdue, pendingAnalyst: av.pending, q: av.q };
         var tickets = await call('listTickets', filters);
-        console.log('listTickets devolveu (filtros=' + JSON.stringify(filters) + '):', tickets);
         list.innerHTML = '';
         if (tickets.length === 0) {
           list.appendChild(el('p', { class: 'empty' }, [av.mode === 'inbox' ? 'Caixa de entrada vazia — tudo distribuído!' : 'Nenhum chamado encontrado.']));

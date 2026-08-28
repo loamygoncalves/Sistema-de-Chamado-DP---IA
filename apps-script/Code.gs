@@ -112,47 +112,6 @@ function handleAdminRoute_(action, e) {
     return ContentService.createTextOutput(setStepImages_(faq, ids));
   }
 
-  // Diagnóstico: tenta buscar UMA imagem (pelo mesmo caminho do chat) e
-  // devolve o erro real, caso dê errado, em vez de engolir a exceção como
-  // getStepImage faz normalmente.
-  if (action === 'diag') {
-    var diagId = extractDriveId_(e.parameter.id || '');
-    if (!diagId) return ContentService.createTextOutput('Passe ?admin=diag&id=<ID do Drive>.');
-    var dataUri = getStepImage(diagId);
-    return ContentService.createTextOutput(dataUri ? ('OK: ' + dataUri.length + ' caracteres de data URI.') : 'ERRO: veja o Registro de execução (Logger) para o detalhe.');
-  }
-
-  // Diagnóstico: mostra o que a Fila do analista realmente está vendo —
-  // total de linhas cruas na aba Chamados vs. o que listTickets devolve, e
-  // os valores reais de Status/AnalistaResponsavel das 3 primeiras, para
-  // achar por que um filtro está descartando tudo (ou nada foi lido).
-  if (action === 'diagchamados') {
-    var cru = rowsAsObjects_(sheet_(SHEETS.CHAMADOS, HEADERS.Chamados));
-    var viaLista = listTickets({});
-    var viaInbox = listTickets({ unassigned: true, mine: false, status: '', overdue: false, pendingAnalyst: false, q: '' });
-    var amostra = cru.slice(0, 3).map(function (t) {
-      return t.ID + ': status="' + t.Status + '" analista="' + (t.AnalistaResponsavel || '') + '" aberto=' + t.DataAbertura + ' sla=' + t.PrazoSLA + ' fechamento=' + t.DataFechamento;
-    }).join(' | ');
-    // google.script.run serializa o retorno como JSON por baixo dos panos;
-    // se algum campo (normalmente uma data inválida) quebrar essa
-    // serialização, o navegador recebe "null" em vez do array — sem
-    // exceção nenhuma aparecendo no servidor. Reproduz aqui pra confirmar.
-    var serializavel;
-    try {
-      JSON.stringify(viaInbox);
-      serializavel = 'sim';
-    } catch (errSerial) {
-      serializavel = 'NÃO — ' + errSerial;
-    }
-    return ContentService.createTextOutput(
-      'Linhas cruas na aba Chamados: ' + cru.length +
-      ' | listTickets({}) devolveu: ' + viaLista.length +
-      ' | listTickets(igual a "Caixa de entrada") devolveu: ' + viaInbox.length +
-      ' | serializa como JSON (o que google.script.run faz): ' + serializavel +
-      ' | amostra: ' + amostra
-    );
-  }
-
   return ContentService.createTextOutput('Ação desconhecida.');
 }
 
@@ -282,11 +241,24 @@ function computeSlaDueAt_(priority, slaHorasMax) {
   return date;
 }
 
+/**
+ * google.script.run não entrega Date de volta ao navegador direito nesta
+ * combinação de Chrome/Apps Script — o retorno some e o sucesso vira `null`
+ * sem exceção nenhuma (bug real encontrado e confirmado num teste isolado).
+ * Por isso toda data que sai daqui vira string ISO; o cliente já usa
+ * `new Date(...)` em cima do que recebe, então funciona igual.
+ */
+function toIso_(value) {
+  if (!value) return null;
+  if (value instanceof Date) return isNaN(value.getTime()) ? null : value.toISOString();
+  return String(value);
+}
+
 function serializeTicket_(t) {
   return {
     id: t.ID,
     protocol: t.Protocolo,
-    openedAt: t.DataAbertura,
+    openedAt: toIso_(t.DataAbertura),
     requesterName: t.SolicitanteNome,
     requesterEmail: t.SolicitanteEmail,
     matricula: t.Matricula,
@@ -297,15 +269,15 @@ function serializeTicket_(t) {
     priority: t.Prioridade,
     status: t.Status,
     assignedTo: t.AnalistaResponsavel || null,
-    slaDueAt: t.PrazoSLA || null,
-    closedAt: t.DataFechamento || null,
+    slaDueAt: toIso_(t.PrazoSLA),
+    closedAt: toIso_(t.DataFechamento),
     closureReason: t.MotivoFechamento || null,
     source: t.Origem
   };
 }
 
 function serializeHistory_(h) {
-  return { id: h.ID, author: h.Autor, role: h.Papel, internal: !!h.Interno, body: h.Mensagem, at: h.DataHora };
+  return { id: h.ID, author: h.Autor, role: h.Papel, internal: !!h.Interno, body: h.Mensagem, at: toIso_(h.DataHora) };
 }
 
 function addHistoryEntry_(ticketId, author, role, internal, body) {
@@ -366,15 +338,6 @@ function getTicketDetail(ticketId) {
  * department, overdue, pendingAnalyst, q}. Colaborador só vê os próprios
  * chamados, independente dos filtros — os filtros de fila (caixa de
  * entrada etc.) só valem para analistas. */
-/** Teste temporário: isola se o problema no round-trip do google.script.run
- * é o campo de data. Remover depois de achar a causa. */
-function debugEchoComData() {
-  return [{ id: '1', quando: new Date() }, { id: '2', quando: new Date() }];
-}
-function debugEchoSemData() {
-  return [{ id: '1', quando: 'agora' }, { id: '2', quando: 'antes' }];
-}
-
 function listTickets(filters) {
   filters = filters || {};
   var user = getCurrentUser();
