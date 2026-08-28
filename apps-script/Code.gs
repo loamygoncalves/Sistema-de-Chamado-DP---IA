@@ -73,7 +73,66 @@ var MOTIVOS_ENCERRAMENTO = {
    Servir a página
    ============================================================ */
 
-function doGet() {
+/**
+ * Rotas de administração, disponíveis SÓ para o dono do app (quem publicou
+ * a implantação). Servem para atualizar a base sem abrir o editor de
+ * script — útil depois de uma atualização que traga conteúdo novo.
+ *
+ * A checagem é simples e forte: o app roda "como" o dono, então
+ * getEffectiveUser() é sempre ele; getActiveUser() é quem está chamando.
+ * Só quando os dois são a mesma pessoa a rota executa. Para qualquer
+ * outro colaborador o parâmetro é ignorado e ele vê o sistema normal.
+ */
+function handleAdminRoute_(action, e) {
+  var dono = Session.getEffectiveUser().getEmail();
+  var chamador = Session.getActiveUser().getEmail();
+  if (!chamador || !dono || chamador.toLowerCase() !== dono.toLowerCase()) {
+    return ContentService.createTextOutput('Rota restrita ao dono do aplicativo.');
+  }
+
+  if (action === 'setup') {
+    initializeSpreadsheet();
+    return ContentService.createTextOutput('OK: base atualizada. ' + resumoDaBase_());
+  }
+
+  // Preenche a coluna Imagem das etapas de um FAQ, na ordem, a partir de
+  // uma lista de IDs/links do Drive separados por vírgula.
+  if (action === 'imagens') {
+    var faq = e.parameter.faq || '';
+    var ids = String(e.parameter.ids || '').split(',').filter(function (x) { return x.trim(); });
+    return ContentService.createTextOutput(setStepImages_(faq, ids));
+  }
+
+  return ContentService.createTextOutput('Ação desconhecida.');
+}
+
+function resumoDaBase_() {
+  return 'FAQs: ' + Math.max(0, sheet_(SHEETS.FAQS, HEADERS.FAQs).getLastRow() - 1) +
+    ' | Passos: ' + Math.max(0, sheet_(SHEETS.PASSOS, HEADERS.Passos).getLastRow() - 1);
+}
+
+/** Grava os links de imagem nas etapas de um FAQ, na ordem em que vierem. */
+function setStepImages_(faqQuestion, ids) {
+  var sheet = sheet_(SHEETS.PASSOS, HEADERS.Passos);
+  var alvo = String(faqQuestion).trim().toLowerCase();
+  var linhas = rowsAsObjects_(sheet)
+    .filter(function (p) { return String(p.Pergunta).trim().toLowerCase() === alvo; })
+    .sort(function (a, b) { return Number(a.Ordem || 0) - Number(b.Ordem || 0); });
+  if (linhas.length === 0) return 'Nenhuma etapa encontrada para: ' + faqQuestion;
+
+  var gravadas = 0;
+  linhas.forEach(function (linha, i) {
+    if (i >= ids.length) return;
+    updateObject_(sheet, linha._row, { Imagem: ids[i].trim() });
+    gravadas++;
+  });
+  return 'OK: ' + gravadas + ' de ' + linhas.length + ' etapas com imagem.';
+}
+
+function doGet(e) {
+  var action = (e && e.parameter && e.parameter.admin) ? String(e.parameter.admin) : '';
+  if (action) return handleAdminRoute_(action, e);
+
   return HtmlService.createTemplateFromFile('Index')
     .evaluate()
     .setTitle('BEEP AI Service Desk')

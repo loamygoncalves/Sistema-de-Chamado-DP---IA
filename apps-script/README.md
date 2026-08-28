@@ -64,6 +64,20 @@ sistema entrega a imagem embutida (o próprio script lê do Drive), então
 os prints **não precisam ser públicos** — ficam privados e visíveis só
 dentro do sistema.
 
+## Atualizando a base depois de uma mudança
+
+Quando uma atualização trouxer conteúdo novo (FAQs, etapas), rode
+`initializeSpreadsheet` de novo — é aditivo: insere só o que falta, não
+duplica nada e não apaga links de imagem já preenchidos.
+
+Dá para fazer sem abrir o editor, pelo navegador, com as rotas de
+administração do app (só funcionam para o **dono** da implantação; para
+qualquer outro colaborador o parâmetro é ignorado):
+
+- `.../exec?admin=setup` — atualiza a base e devolve um resumo.
+- `.../exec?admin=imagens&faq=<pergunta>&ids=<id1,id2,...>` — preenche a
+  coluna `Imagem` das etapas daquele FAQ, na ordem.
+
 ## O que este protótipo NÃO tem (limitações do Apps Script)
 
 - **Não é um modelo de linguagem (LLM)** — a IA não *gera* texto novo: ela
