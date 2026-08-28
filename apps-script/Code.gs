@@ -112,22 +112,14 @@ function handleAdminRoute_(action, e) {
     return ContentService.createTextOutput(setStepImages_(faq, ids));
   }
 
-  // Diagnóstico temporário: tenta ler UMA imagem do Drive e devolve o erro
-  // real (autorização pendente vs. arquivo inacessível), em vez de engolir
-  // a exceção como getStepImage faz. Remover depois de resolver o passo a
-  // passo com imagem.
+  // Diagnóstico: tenta buscar UMA imagem (pelo mesmo caminho do chat) e
+  // devolve o erro real, caso dê errado, em vez de engolir a exceção como
+  // getStepImage faz normalmente.
   if (action === 'diag') {
     var diagId = extractDriveId_(e.parameter.id || '');
     if (!diagId) return ContentService.createTextOutput('Passe ?admin=diag&id=<ID do Drive>.');
-    try {
-      var arquivo = DriveApp.getFileById(diagId);
-      var b = arquivo.getBlob();
-      return ContentService.createTextOutput(
-        'OK: nome="' + arquivo.getName() + '" tipo=' + b.getContentType() + ' bytes=' + b.getBytes().length
-      );
-    } catch (err) {
-      return ContentService.createTextOutput('ERRO: ' + err);
-    }
+    var dataUri = getStepImage(diagId);
+    return ContentService.createTextOutput(dataUri ? ('OK: ' + dataUri.length + ' caracteres de data URI.') : 'ERRO: veja o Registro de execução (Logger) para o detalhe.');
   }
 
   return ContentService.createTextOutput('Ação desconhecida.');
@@ -564,36 +556,31 @@ function getStepsFor(faqQuestion) {
 }
 
 /**
- * Entrega a imagem como data URI, lida do Drive pelo próprio script.
- *
- * É de propósito que não se use link direto do Drive: assim os prints não
- * precisam ser compartilhados com ninguém (o script lê como o usuário que
- * publicou), continuam privados, e não dependem dos endpoints de hotlink
- * do Google, que são instáveis. Falha nunca quebra a resposta — a etapa
- * simplesmente aparece sem a tela.
+ * Entrega a imagem como data URI. Busca pelo link público do Drive (o
+ * arquivo precisa estar compartilhado como "qualquer pessoa com o link"),
+ * em vez de ler via DriveApp — isso evita depender de um escopo de leitura
+ * geral do Drive (que só o dono da implantação pode autorizar). O link
+ * não é exposto ao navegador do colaborador: o próprio script busca o
+ * conteúdo e entrega como data URI embutido na resposta.
+ * Falha nunca quebra a resposta — a etapa simplesmente aparece sem a tela.
  */
 function getStepImage(fileId) {
   var id = extractDriveId_(fileId);
   if (!id) return '';
   try {
-    var blob = DriveApp.getFileById(id).getBlob();
-    return 'data:' + blob.getContentType() + ';base64,' + Utilities.base64Encode(blob.getBytes());
+    var res = UrlFetchApp.fetch('https://drive.google.com/uc?export=view&id=' + id, { muteHttpExceptions: true });
+    if (res.getResponseCode() !== 200) {
+      Logger.log('Não consegui buscar a imagem do passo a passo (' + id + '): HTTP ' + res.getResponseCode());
+      return '';
+    }
+    var blob = res.getBlob();
+    var type = blob.getContentType() || 'image/png';
+    if (type.indexOf('image/') !== 0) return '';
+    return 'data:' + type + ';base64,' + Utilities.base64Encode(blob.getBytes());
   } catch (e) {
-    Logger.log('Não consegui ler a imagem do passo a passo (' + id + '): ' + e);
+    Logger.log('Não consegui buscar a imagem do passo a passo (' + id + '): ' + e);
     return '';
   }
-}
-
-/**
- * Só para forçar a tela de autorização do escopo do Drive: rode esta função
- * pelo editor (menu ao lado de "Executar"), logado como a conta que fez o
- * deploy. Sem parâmetro nenhum, então diferente de rodar getStepImage
- * direto pelo editor (que não recebe argumento e nunca chega a chamar o
- * Drive), esta função sempre toca o DriveApp de verdade. Remover depois.
- */
-function testDriveAuth_() {
-  var blob = DriveApp.getFileById('1xHCkTqY_u8WQvryfGjAMDoIRNq_D8Cbs').getBlob();
-  Logger.log('OK, autorizado: ' + blob.getContentType() + ', ' + blob.getBytes().length + ' bytes.');
 }
 
 /* ============================================================

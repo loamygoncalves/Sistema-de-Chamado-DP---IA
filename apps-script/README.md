@@ -50,8 +50,11 @@ etapa, como o guia de primeiro acesso ao ADP. As etapas ficam na aba
 - Etapa **sem** imagem funciona normalmente — vale pelo texto.
 
 Como adicionar um passo a passo novo:
-1. Suba os prints numa pasta do Drive (a mesma conta que publicou o app,
-   ou compartilhe a pasta com ela).
+1. Suba os prints numa pasta do Drive e compartilhe cada print (ou a
+   pasta) como **"Qualquer pessoa com o link" — Leitor**. Não precisa
+   compartilhar com uma conta específica, só ligar esse compartilhamento
+   por link (o arquivo continua fora de busca/indexação — só quem tem o
+   link ou o ID consegue abrir).
 2. Crie o FAQ na aba `FAQs`, com um resumo curto na `Resposta`.
 3. Crie uma linha por etapa na aba `Passos`, colando o link do print.
 
@@ -60,9 +63,13 @@ que faz a IA encontrar o FAQ. Print sem texto vira conteúdo invisível
 para a busca.
 
 Dica: redimensione os prints para ~1000px de largura antes de subir. O
-sistema entrega a imagem embutida (o próprio script lê do Drive), então
-os prints **não precisam ser públicos** — ficam privados e visíveis só
-dentro do sistema.
+sistema entrega a imagem embutida (o próprio script busca o link e
+devolve como data URI) — o colaborador nunca vê o link do Drive nem
+precisa de conta para abri-lo, mas o arquivo em si passa a depender do
+compartilhamento por link, não fica 100% privado como uma leitura direta
+via Drive exigiria. Optamos por esse caminho porque a leitura direta
+(`DriveApp.getFileById`) pede um escopo de Drive que só a conta que fez o
+deploy consegue autorizar — o link público evita essa dependência.
 
 ## Atualizando a base depois de uma mudança
 
