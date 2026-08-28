@@ -79,9 +79,12 @@ function initializeSpreadsheet() {
     function (r) { return normalizeKey_(r.Pergunta) + '#' + normalizeKey_(r.Ordem); });
 
   // Só garante que as abas existem — sem dado de exemplo (nascem vazias).
+  // Colaboradores é preenchida à parte, colando o relatório da ADP por
+  // cima (ver README) — não faz sentido "semear" com dado de exemplo.
   sheet_(SHEETS.CHAMADOS, HEADERS.Chamados);
   sheet_(SHEETS.HISTORICO, HEADERS.Historico);
   sheet_(SHEETS.ANEXOS, HEADERS.Anexos);
+  sheet_(SHEETS.COLABORADORES, HEADERS.Colaboradores);
 
   var doneMessage =
     (novos > 0
@@ -89,8 +92,9 @@ function initializeSpreadsheet() {
       : 'Planilhas já estavam em dia — nada novo a adicionar.\n\n') +
     'Antes de divulgar o link do sistema:\n' +
     '1) Edite a aba "Analistas" com os e-mails reais do time de DP.\n' +
-    '2) Para um passo a passo com imagens, use a aba "Passos" (ver README).\n' +
-    '3) Publique como app da Web (Implantar > Nova implantação).';
+    '2) Cole o relatório de colaboradores ativos da ADP na aba "Colaboradores" (ver README).\n' +
+    '3) Para um passo a passo com imagens, use a aba "Passos" (ver README).\n' +
+    '4) Publique como app da Web (Implantar > Nova implantação).';
   try {
     // SpreadsheetApp.getUi() só funciona quando o script é disparado pela
     // própria interface da planilha (o menu "BEEP Service Desk"). Rodando

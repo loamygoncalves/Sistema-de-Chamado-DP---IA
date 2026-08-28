@@ -128,8 +128,47 @@
     document.getElementById('userName').textContent = state.user.name;
     document.getElementById('userEmail').textContent = state.user.email || '(conta sem e-mail detectado)';
     document.getElementById('userRole').textContent = state.user.role === 'analyst' ? 'Analista' : 'Colaborador';
+
+    // Colaborador sem e-mail de conta Google cadastrado (nem toda conta é
+    // @beepsaude) precisa confirmar a matrícula antes de usar o sistema —
+    // é essa checagem contra a aba Colaboradores (importada da ADP, só
+    // gente ativa) que também tira o acesso de quem foi desligado.
+    if (state.user.role === 'employee' && !state.user.verified) {
+      document.getElementById('tabs').innerHTML = '';
+      renderVerifyGate(document.getElementById('view'));
+      return;
+    }
+
     buildTabs();
     setView(state.user.role === 'analyst' ? 'analyst' : 'chat');
+  }
+
+  function renderVerifyGate(root) {
+    root.innerHTML = '';
+    var input = el('input', { type: 'text', placeholder: 'Sua matrícula', style: 'max-width:220px;' });
+    var msg = el('p', { style: 'font-size:12.5px; color:var(--ink-soft); min-height:16px;' }, []);
+    var btn = el('button', {
+      class: 'btn primary', onclick: async function () {
+        var matricula = input.value.trim();
+        if (!matricula) { msg.textContent = 'Informe sua matrícula.'; return; }
+        btn.setAttribute('disabled', 'disabled');
+        msg.textContent = 'Confirmando...';
+        try {
+          state.user = await call('verifyMatricula', matricula);
+          await boot();
+        } catch (e) {
+          msg.textContent = errorMessage(e);
+          btn.removeAttribute('disabled');
+        }
+      }
+    }, ['Confirmar']);
+    root.appendChild(el('div', { class: 'card', style: 'max-width:420px; margin:32px auto;' }, [
+      el('h2', { style: 'margin:0 0 8px; font-size:16px;' }, ['Confirme sua matrícula']),
+      el('p', { style: 'font-size:13px; color:var(--ink-soft); margin:0 0 14px;' },
+        ['Não encontramos sua conta Google na nossa lista de colaboradores ativos. Informe sua matrícula para confirmar quem você é — é só na primeira vez.']),
+      el('div', { style: 'display:flex; gap:8px; align-items:center;' }, [input, btn]),
+      msg
+    ]));
   }
 
   function buildTabs() {

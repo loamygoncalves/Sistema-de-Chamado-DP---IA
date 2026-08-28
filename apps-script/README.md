@@ -71,6 +71,39 @@ via Drive exigiria. Optamos por esse caminho porque a leitura direta
 (`DriveApp.getFileById`) pede um escopo de Drive que só a conta que fez o
 deploy consegue autorizar — o link público evita essa dependência.
 
+## Acesso de colaboradores sem e-mail @beepsaude (aba `Colaboradores`)
+
+Nem todo colaborador tem conta Google do domínio da empresa — só o time de
+analistas tem, garantidamente. Por isso o deploy aceita **qualquer conta
+Google** (não só do domínio — ver `webapp.access` no `appsscript.json`), e
+quem não tem e-mail cadastrado precisa confirmar a identidade por
+matrícula, contra a aba `Colaboradores`:
+
+| Matricula | Nome | Email | Filial | DataAdmissao | Celular |
+|---|---|---|---|---|---|
+| 12345 | Maria Silva | maria.silva@beepsaude.com.br | Hub São Paulo | 2024-03-01 | 11999999999 |
+
+Como manter essa aba:
+1. Tire da ADP o relatório de **colaboradores ativos** (Matrícula, Nome,
+   E-mail, Filial/"Nome Fantasia", Data de admissão, Celular).
+2. Selecione as linhas de dado da aba `Colaboradores` (tudo abaixo do
+   cabeçalho) e apague.
+3. Cole o relatório novo por cima, mantendo o cabeçalho da linha 1.
+
+Como o relatório traz **só quem está ativo**, colar por cima (substituição
+completa) já resolve o desligamento sozinho: quem saiu da empresa some da
+aba no próximo import e, na tentativa seguinte de acessar, nem o e-mail
+nem a matrícula salva batem mais — a pessoa é barrada.
+
+Como funciona a identificação, na prática:
+- **E-mail bate com a aba** (comum pra quem tem Gmail/Workspace cadastrado
+  na ADP igual ao que usa pra entrar) → reconhecido na hora, sem digitar
+  nada.
+- **E-mail não bate** (e-mail cadastrado não é Google, ou a pessoa entrou
+  com outro Gmail) → aparece uma tela pedindo a **matrícula**; confirmada
+  uma vez contra a aba `Colaboradores`, fica lembrada nas próximas visitas
+  (por conta Google, como o nome/matrícula do formulário de chamado).
+
 ## Atualizando a base depois de uma mudança
 
 Quando uma atualização trouxer conteúdo novo (FAQs, etapas), rode
@@ -78,8 +111,9 @@ Quando uma atualização trouxer conteúdo novo (FAQs, etapas), rode
 duplica nada e não apaga links de imagem já preenchidos.
 
 Dá para fazer sem abrir o editor, pelo navegador, com as rotas de
-administração do app (só funcionam para o **dono** da implantação; para
-qualquer outro colaborador o parâmetro é ignorado):
+administração do app (funcionam para o **dono** da implantação e para
+qualquer **analista ativo** da aba `Analistas`; para qualquer outra conta o
+parâmetro é ignorado):
 
 - `.../exec?admin=setup` — atualiza a base e devolve um resumo.
 - `.../exec?admin=imagens&faq=<pergunta>&ids=<id1,id2,...>` — preenche a
@@ -105,9 +139,12 @@ qualquer outro colaborador o parâmetro é ignorado):
   (limite de 6 minutos por chamada do Apps Script).
 - **SLA simplificado** — pula sábado/domingo, mas não feriados nacionais
   (o backend real usa um calendário de feriados).
-- **Identidade = conta Google** — não há tela de login própria; quem abre o
-  link usa a própria conta Google. Por isso o deploy recomendado é para o
-  domínio da empresa, não público.
+- **Identidade = conta Google** — não há tela de login/senha própria; quem
+  abre o link usa a própria conta Google (pode ser pessoal, já que nem
+  todo colaborador tem e-mail do domínio). Quem não é reconhecido pelo
+  e-mail confirma a matrícula contra a aba `Colaboradores` (ver seção
+  acima) — essa aba é o controle de acesso de verdade, já que não dá pra
+  desativar a conta Google de quem sai da empresa.
 - Sem histórico de auditoria completo, sem avaliação de atendimento, sem
   base de conhecimento além de FAQs (sem ingestão de documentos).
 
@@ -152,9 +189,14 @@ time ou rodar num piloto pequeno sem precisar de infraestrutura própria.
 9. **Implante como app da Web**: no editor, **Implantar > Nova implantação**
    > tipo "App da Web". Configure:
    - **Executar como**: Eu (sua conta)
-   - **Quem pode acessar**: "Qualquer pessoa em [seu domínio Google
-     Workspace]" — não use "Qualquer pessoa" (público), pois a identificação
-     de quem está usando depende de estar logado numa conta do domínio.
+   - **Quem pode acessar**: **"Qualquer pessoa"** — precisa ser essa opção
+     (não "Qualquer pessoa no domínio"), já que nem todo colaborador tem
+     e-mail `@beepsaude.com.br`. Isso ainda exige estar logado em alguma
+     conta Google (não é "qualquer pessoa, até anônimo"); quem não é
+     reconhecido pelo e-mail confirma a matrícula (ver aba `Colaboradores`
+     acima). Esse campo já vem assim pelo `appsscript.json`, mas confira —
+     ao editar uma implantação já existente pela interface, às vezes é
+     preciso reafirmar a opção manualmente.
    - Copie a URL gerada e compartilhe com o time.
 
 ## Cota e limites a ter em mente

@@ -16,6 +16,7 @@
 var SHEETS = {
   DEPARTAMENTOS: 'Departamentos',
   ANALISTAS: 'Analistas',
+  COLABORADORES: 'Colaboradores',
   CHAMADOS: 'Chamados',
   HISTORICO: 'Historico',
   RESPOSTAS_PADRAO: 'RespostasPadrao',
@@ -27,6 +28,12 @@ var SHEETS = {
 var HEADERS = {
   Departamentos: ['Nome', 'PrioridadePadrao', 'SlaHorasMax'],
   Analistas: ['Nome', 'Email', 'Ativo'],
+  // Diretório oficial vindo da ADP (só colaboradores ativos — reimportar por
+  // cima a cada atualização já revoga quem foi desligado, sem precisar de
+  // coluna de status). Usado pra reconhecer o colaborador pelo e-mail da
+  // conta Google, e como validação de matrícula pra quem não tem e-mail
+  // Google cadastrado.
+  Colaboradores: ['Matricula', 'Nome', 'Email', 'Filial', 'DataAdmissao', 'Celular'],
   Chamados: [
     'ID', 'Protocolo', 'DataAbertura', 'SolicitanteNome', 'SolicitanteEmail', 'Matricula',
     'Departamento', 'Categoria', 'Assunto', 'Descricao', 'Prioridade', 'Status',
@@ -158,20 +165,46 @@ function include(filename) {
    ============================================================ */
 
 /** Papel do usuário logado é decidido pela aba "Analistas": se o e-mail da
- * conta Google atual estiver lá (e Ativo=TRUE), ele é analista; senão é
- * colaborador. Não existe cadastro de senha — a identidade vem da própria
- * conta Google usada para abrir o link (por isso o deploy recomendado é
- * "Qualquer pessoa no domínio", não público). */
+ * conta Google atual estiver lá (e Ativo=TRUE), ele é analista.
+ *
+ * Senão, é colaborador — e como nem todo colaborador tem e-mail de domínio
+ * (a implantação aceita qualquer conta Google, não só @beepsaude), a
+ * identidade dele é conferida contra a aba "Colaboradores" (importada da
+ * ADP, só gente ativa): primeiro pelo e-mail da conta logada, e se não
+ * bater, pela matrícula que ele já confirmou antes (ver verifyMatricula).
+ * Sem bater nenhum dos dois, `verified` vem `false` e o cliente mostra a
+ * tela pedindo a matrícula — é essa checagem que também tira o acesso de
+ * quem foi desligado: a próxima vez que a aba Colaboradores for atualizada
+ * (reimportação substitui tudo), a matrícula/e-mail dessa pessoa somem de
+ * lá e nem o e-mail nem a matrícula salva batem mais. */
 function getCurrentUser() {
   var email = (Session.getActiveUser().getEmail() || Session.getEffectiveUser().getEmail() || '').trim();
   var analistas = rowsAsObjects_(sheet_(SHEETS.ANALISTAS, HEADERS.Analistas));
   var analyst = analistas.filter(function (a) {
     return String(a.Email).trim().toLowerCase() === email.toLowerCase() && a.Ativo;
   })[0];
+  if (analyst) {
+    return { email: email, name: analyst.Nome, role: 'analyst', verified: true, matricula: '', filial: '', dataAdmissao: '' };
+  }
+
+  var colaboradores = rowsAsObjects_(sheet_(SHEETS.COLABORADORES, HEADERS.Colaboradores));
+  var porEmail = email ? colaboradores.filter(function (c) {
+    return String(c.Email).trim().toLowerCase() === email.toLowerCase();
+  })[0] : null;
+  var matriculaSalva = getMyProfile_().matricula;
+  var porMatricula = !porEmail && matriculaSalva ? colaboradores.filter(function (c) {
+    return String(c.Matricula).trim() === String(matriculaSalva).trim();
+  })[0] : null;
+  var colaborador = porEmail || porMatricula;
+
   return {
     email: email,
-    name: analyst ? analyst.Nome : (getMyProfile_().name || (email ? email.split('@')[0] : 'Colaborador')),
-    role: analyst ? 'analyst' : 'employee'
+    name: colaborador ? colaborador.Nome : (getMyProfile_().name || (email ? email.split('@')[0] : 'Colaborador')),
+    role: 'employee',
+    verified: !!colaborador,
+    matricula: colaborador ? colaborador.Matricula : (matriculaSalva || ''),
+    filial: colaborador ? colaborador.Filial : '',
+    dataAdmissao: colaborador ? toIso_(colaborador.DataAdmissao) : ''
   };
 }
 
@@ -179,9 +212,23 @@ function requireAnalyst_(user) {
   if (user.role !== 'analyst') throw new Error('Ação restrita a analistas.');
 }
 
-/** Nome/matrícula ficam salvos por conta Google (UserProperties) depois da
- * primeira abertura de chamado — não existe um diretório de RH aqui, então
- * é assim que o formulário consegue vir "pré-preenchido" nas próximas vezes. */
+/** Confere a matrícula digitada contra a aba Colaboradores (importada da
+ * ADP). Usada por quem não tem e-mail de conta Google cadastrado — depois
+ * de confirmada uma vez, fica salva por conta Google (UserProperties) e
+ * getCurrentUser() volta a reconhecer sozinho nas próximas visitas. */
+function verifyMatricula(matricula) {
+  var mat = String(matricula || '').trim();
+  if (!mat) throw new Error('Informe sua matrícula.');
+  var colaborador = rowsAsObjects_(sheet_(SHEETS.COLABORADORES, HEADERS.Colaboradores))
+    .filter(function (c) { return String(c.Matricula).trim() === mat; })[0];
+  if (!colaborador) throw new Error('Matrícula não encontrada. Confira o número ou fale com o time de DP.');
+  saveMyProfile_(colaborador.Nome, colaborador.Matricula);
+  return getCurrentUser();
+}
+
+/** Nome/matrícula ficam salvos por conta Google (UserProperties) — depois de
+ * confirmados uma vez (por bater com a aba Colaboradores, ou digitados na
+ * abertura de chamado), pré-preenchem as próximas visitas. */
 function getMyProfile_() {
   var props = PropertiesService.getUserProperties();
   return { name: props.getProperty('nome') || '', matricula: props.getProperty('matricula') || '' };
