@@ -88,6 +88,74 @@ function confidenceOf_(result, analyzed, thresholds) {
 }
 
 /**
+ * Nem toda mensagem é uma pergunta. "Era exatamente essa resposta que eu
+ * queria", "obrigado", "bom dia", "não era isso" — tratar tudo como
+ * consulta à base faz a IA responder um FAQ aleatório para um "obrigado",
+ * que é o comportamento mais robótico que existe.
+ *
+ * Devolve: 'gratidao' | 'saudacao' | 'despedida' | 'correcao' | 'pergunta'.
+ */
+var NEGACAO_ = [
+  /\bnao (e|era|eh) (isso|essa|esse)\b/, /\bnao (estou|to|tou) (falando|perguntando|querendo)\b/,
+  /\bnao entendi\b/, /\bnao (ajudou|resolveu|serviu|era bem isso)\b/, /\bnao foi isso\b/,
+  /\bnada a ver\b/, /\bta errado\b/, /\bnao quis dizer\b/
+];
+
+var GRATIDAO_ = [
+  /\bobrigad/, /\bvaleu\b/, /\bagradec/, /\bperfeito\b/, /\botimo\b/, /\bexcelente\b/,
+  /\bera (exatamente |bem |justamente )?(isso|essa|esse)\b/, /\bessa (e|era) a resposta\b/,
+  /\bque eu queria\b/, /\b(me )?(ajudou|resolveu|esclareceu)\b/, /\bconsegui\b/,
+  /\bshow\b/, /\bbeleza\b/, /\bmuito bom\b/, /\bera isso mesmo\b/, /\bentendi\b/
+];
+
+var SAUDACAO_ = /^\s*(oi|ola|opa|eai|e ai|bom dia|boa tarde|boa noite|hey|hi)\b/;
+var DESPEDIDA_ = /\b(tchau|ate mais|ate logo|falou|flw|xau|ate a proxima)\b/;
+
+function detectIntent_(question, history) {
+  var t = ' ' + normalize_(question) + ' ';
+  var palavras = normalize_(question).trim().split(/\s+/).length;
+
+  // Negação vem antes de gratidão de propósito: "não entendi" e "não
+  // ajudou" contêm as mesmas palavras dos elogios, com sentido oposto.
+  for (var i = 0; i < NEGACAO_.length; i++) {
+    if (NEGACAO_[i].test(t)) return 'correcao';
+  }
+  if (history.length > 0) {
+    for (var j = 0; j < GRATIDAO_.length; j++) {
+      // Frase longa com "obrigado" no meio costuma ser agradecimento +
+      // nova pergunta ("obrigado! e sobre férias?") — essa continua sendo
+      // tratada como pergunta, para não engolir a dúvida junto.
+      if (GRATIDAO_[j].test(t) && palavras <= 10 && question.indexOf('?') === -1) return 'gratidao';
+    }
+  }
+  if (SAUDACAO_.test(t) && palavras <= 4) return 'saudacao';
+  if (DESPEDIDA_.test(t) && palavras <= 6) return 'despedida';
+  return 'pergunta';
+}
+
+/** Resposta de conversa (não consulta a base, não oferece chamado, não
+ * mostra confiança) — é só a IA se comportando como gente. */
+function smallTalkAnswer_(intent, seed) {
+  if (intent === 'gratidao') {
+    return pickVariant_([
+      'Que bom que ajudou! 😊 Fico à disposição — se surgir qualquer outra dúvida de DP, é só me chamar.',
+      'Fico feliz em ter ajudado! Se precisar de mais alguma coisa sobre DP, estou por aqui.',
+      'Perfeito, era isso mesmo então! Qualquer outra dúvida, é só perguntar.'
+    ], seed);
+  }
+  if (intent === 'saudacao') {
+    return pickVariant_([
+      'Oi! Sou a assistente do DP da Beep. Pode perguntar sobre folha de pagamento, férias, benefícios, ponto, documentos — o que você precisar.',
+      'Olá! Posso te ajudar com dúvidas de DP: pagamento, férias, benefícios, ponto, atestados e por aí vai. O que você precisa?'
+    ], seed);
+  }
+  return pickVariant_([
+    'Até mais! Qualquer dúvida de DP, é só voltar aqui. 👋',
+    'Precisando, estou por aqui. Até logo!'
+  ], seed);
+}
+
+/**
  * A pergunta aponta para algo já dito? "Como eu consigo ESSE e-mail?",
  * "e ISSO muda se...", "como faço NESSE caso?" — o pronome demonstrativo
  * é a marca de que a frase não se explica sozinha.
@@ -127,7 +195,15 @@ function composeAnswer_(faq, opts) {
   var seed = opts.seed || faq.Pergunta;
   var parts = [];
 
-  if (opts.isFollowUp) {
+  if (opts.isCorrection) {
+    // Reconhece o engano antes de tentar de novo — sem isso, insistir num
+    // novo FAQ depois de um "não é isso" soa como se a IA não tivesse lido.
+    parts.push(pickVariant_([
+      'Ah, desculpa — entendi errado. Deixa eu tentar de novo:',
+      'Foi mal, me confundi. Veja se é isto:',
+      'Entendi, não era isso mesmo. Talvez seja isto:'
+    ], seed));
+  } else if (opts.isFollowUp) {
     parts.push(pickVariant_([
       'Complementando o que falamos sobre ' + dept + ':',
       'Ainda sobre ' + dept + ':',
@@ -185,9 +261,20 @@ function askAi(question, history) {
     };
   }
 
+  // Antes de qualquer busca: isto é mesmo uma pergunta? Um "obrigado, era
+  // isso!" não deve virar consulta à base de conhecimento.
+  var intent = detectIntent_(question, recentHistory);
+  if (intent === 'gratidao' || intent === 'saudacao' || intent === 'despedida') {
+    return {
+      answer: smallTalkAnswer_(intent, question),
+      decision: 'conversa', confidence: 1, source: null, options: []
+    };
+  }
+
   var index = buildIndex_(faqs);
   var analyzed = analyzeQuery_(question, index.vocabulary);
   var thresholds = getThresholds_();
+  var isCorrection = intent === 'correcao';
 
   // A pergunta SOZINHA vem primeiro. O histórico só entra se ela não se
   // sustentar por conta própria — senão uma troca clara de assunto ("qual
@@ -220,6 +307,17 @@ function askAi(question, history) {
       answer: 'Não encontrei nada sobre isso na nossa base de conhecimento, então prefiro não arriscar uma resposta errada. Quer que eu abra um chamado para um analista do DP?',
       decision: 'auto_ticket', confidence: 0, source: null, options: []
     };
+  }
+
+  // "Não é isso que eu perguntei": o colaborador está corrigindo o rumo,
+  // então o que já foi respondido sai da disputa e a IA tenta a próxima
+  // melhor opção, em vez de insistir no mesmo FAQ.
+  if (isCorrection) {
+    var remaining = ranked.filter(function (r) { return !alreadyAnswered_(r.faq, recentHistory); });
+    if (remaining.length > 0) {
+      ranked = remaining;
+      confidence = confidenceOf_(ranked[0], analyzed, thresholds);
+    }
   }
 
   var best = ranked[0];
@@ -264,7 +362,7 @@ function askAi(question, history) {
 
   var confident = confidence >= thresholds.auto;
   return {
-    answer: composeAnswer_(best.faq, { confident: confident, isFollowUp: isFollowUp, seed: question }),
+    answer: composeAnswer_(best.faq, { confident: confident, isFollowUp: isFollowUp, isCorrection: isCorrection, seed: question }),
     decision: confident ? 'auto_answer' : 'suggest_ticket',
     confidence: confidence,
     source: { department: best.faq.Departamento, question: best.faq.Pergunta },

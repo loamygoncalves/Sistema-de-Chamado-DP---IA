@@ -216,6 +216,16 @@
         return;
       }
       var wrap = el('div', { class: 'msg assistant' }, [el('div', { class: 'bubble' }, [m.content])]);
+
+      // Conversa (agradecimento, saudação, despedida): é só uma fala, não
+      // uma consulta à base. Mostrar "72% de confiança" e "isso resolveu
+      // sua dúvida?" embaixo de um "que bom que ajudou!" é justamente o
+      // tipo de resposta robótica que se quer evitar.
+      if (m.decision === 'conversa') {
+        log.appendChild(wrap);
+        return;
+      }
+
       var confPct = Math.round(m.confidence * 100);
       var decisionLabel = m.decision === 'auto_answer' ? 'Resposta automática'
         : m.decision === 'suggest_ticket' ? 'Sugestão de chamado'

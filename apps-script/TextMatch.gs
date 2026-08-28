@@ -47,6 +47,12 @@ var SYNONYMS_ = {
   remuneracao: 'salario pagamento',
   vencimento: 'salario pagamento',
   pagto: 'pagamento salario',
+  // O FAQ do salário se chama "Quando e onde recebo meu SALÁRIO?", mas o
+  // do 13º tem "PAGAMENTO" no título. Sem esta ponte, quem pergunta "que
+  // dia cai o pagamento" cai no 13º, que é o assunto errado.
+  pagamento: 'pagamento salario recebo',
+  recebo: 'salario pagamento recebo',
+  receber: 'salario pagamento recebo',
   liquido: 'salario pagamento',
   bruto: 'salario pagamento',
   desconto: 'desconto salario contracheque',
