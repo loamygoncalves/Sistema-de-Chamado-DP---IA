@@ -526,6 +526,7 @@
       try {
         var filters = { unassigned: av.mode === 'inbox', mine: av.mode === 'mine', status: av.status, overdue: av.overdue, pendingAnalyst: av.pending, q: av.q };
         var tickets = await call('listTickets', filters);
+        console.log('listTickets devolveu (filtros=' + JSON.stringify(filters) + '):', tickets);
         list.innerHTML = '';
         if (tickets.length === 0) {
           list.appendChild(el('p', { class: 'empty' }, [av.mode === 'inbox' ? 'Caixa de entrada vazia — tudo distribuído!' : 'Nenhum chamado encontrado.']));
@@ -533,6 +534,7 @@
         }
         tickets.forEach(function (t) { list.appendChild(ticketRow_(t, function () { openTicketDetail_(t.id, 'analyst'); })); });
       } catch (e) {
+        console.error('Falha ao carregar a fila do analista:', e);
         list.innerHTML = '';
         list.appendChild(el('p', { class: 'empty' }, ['Erro ao carregar os chamados: ' + errorMessage(e)]));
       }
