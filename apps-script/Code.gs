@@ -131,12 +131,24 @@ function handleAdminRoute_(action, e) {
     var viaLista = listTickets({});
     var viaInbox = listTickets({ unassigned: true, mine: false, status: '', overdue: false, pendingAnalyst: false, q: '' });
     var amostra = cru.slice(0, 3).map(function (t) {
-      return t.ID + ': status="' + t.Status + '" analista="' + (t.AnalistaResponsavel || '') + '"';
+      return t.ID + ': status="' + t.Status + '" analista="' + (t.AnalistaResponsavel || '') + '" aberto=' + t.DataAbertura + ' sla=' + t.PrazoSLA + ' fechamento=' + t.DataFechamento;
     }).join(' | ');
+    // google.script.run serializa o retorno como JSON por baixo dos panos;
+    // se algum campo (normalmente uma data inválida) quebrar essa
+    // serialização, o navegador recebe "null" em vez do array — sem
+    // exceção nenhuma aparecendo no servidor. Reproduz aqui pra confirmar.
+    var serializavel;
+    try {
+      JSON.stringify(viaInbox);
+      serializavel = 'sim';
+    } catch (errSerial) {
+      serializavel = 'NÃO — ' + errSerial;
+    }
     return ContentService.createTextOutput(
       'Linhas cruas na aba Chamados: ' + cru.length +
       ' | listTickets({}) devolveu: ' + viaLista.length +
       ' | listTickets(igual a "Caixa de entrada") devolveu: ' + viaInbox.length +
+      ' | serializa como JSON (o que google.script.run faz): ' + serializavel +
       ' | amostra: ' + amostra
     );
   }
