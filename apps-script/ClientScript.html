@@ -518,8 +518,8 @@
       class: 'chip', onclick: async function () {
         debugOut.textContent = 'testando...';
         try {
-          var comData = await call('debugEchoComData_');
-          var semData = await call('debugEchoSemData_');
+          var comData = await call('debugEchoComData');
+          var semData = await call('debugEchoSemData');
           debugOut.textContent = 'com data: ' + JSON.stringify(comData) + ' | sem data: ' + JSON.stringify(semData);
         } catch (e) {
           debugOut.textContent = 'erro no teste: ' + errorMessage(e);

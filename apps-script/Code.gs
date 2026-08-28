@@ -368,10 +368,10 @@ function getTicketDetail(ticketId) {
  * entrada etc.) só valem para analistas. */
 /** Teste temporário: isola se o problema no round-trip do google.script.run
  * é o campo de data. Remover depois de achar a causa. */
-function debugEchoComData_() {
+function debugEchoComData() {
   return [{ id: '1', quando: new Date() }, { id: '2', quando: new Date() }];
 }
-function debugEchoSemData_() {
+function debugEchoSemData() {
   return [{ id: '1', quando: 'agora' }, { id: '2', quando: 'antes' }];
 }
 
