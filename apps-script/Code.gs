@@ -584,6 +584,18 @@ function getStepImage(fileId) {
   }
 }
 
+/**
+ * Só para forçar a tela de autorização do escopo do Drive: rode esta função
+ * pelo editor (menu ao lado de "Executar"), logado como a conta que fez o
+ * deploy. Sem parâmetro nenhum, então diferente de rodar getStepImage
+ * direto pelo editor (que não recebe argumento e nunca chega a chamar o
+ * Drive), esta função sempre toca o DriveApp de verdade. Remover depois.
+ */
+function testDriveAuth_() {
+  var blob = DriveApp.getFileById('1xHCkTqY_u8WQvryfGjAMDoIRNq_D8Cbs').getBlob();
+  Logger.log('OK, autorizado: ' + blob.getContentType() + ', ' + blob.getBytes().length + ' bytes.');
+}
+
 /* ============================================================
    Respostas padrão
    ============================================================ */
