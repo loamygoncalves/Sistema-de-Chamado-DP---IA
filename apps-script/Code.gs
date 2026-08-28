@@ -91,9 +91,9 @@ function handleAdminRoute_(action, e) {
   if (!chamador || !dono) {
     return ContentService.createTextOutput('Rota restrita ao dono do aplicativo.');
   }
-  var ehDono = chamador.toLowerCase() === dono.toLowerCase();
+  var ehDono = chamador.trim().toLowerCase() === dono.trim().toLowerCase();
   var ehAnalista = rowsAsObjects_(sheet_(SHEETS.ANALISTAS, HEADERS.Analistas)).some(function (a) {
-    return String(a.Email).toLowerCase() === chamador.toLowerCase() && a.Ativo;
+    return String(a.Email).trim().toLowerCase() === chamador.trim().toLowerCase() && a.Ativo;
   });
   if (!ehDono && !ehAnalista) {
     return ContentService.createTextOutput('Rota restrita ao dono do aplicativo.');
@@ -173,10 +173,10 @@ function include(filename) {
  * conta Google usada para abrir o link (por isso o deploy recomendado é
  * "Qualquer pessoa no domínio", não público). */
 function getCurrentUser() {
-  var email = Session.getActiveUser().getEmail() || Session.getEffectiveUser().getEmail() || '';
+  var email = (Session.getActiveUser().getEmail() || Session.getEffectiveUser().getEmail() || '').trim();
   var analistas = rowsAsObjects_(sheet_(SHEETS.ANALISTAS, HEADERS.Analistas));
   var analyst = analistas.filter(function (a) {
-    return String(a.Email).toLowerCase() === email.toLowerCase() && a.Ativo;
+    return String(a.Email).trim().toLowerCase() === email.toLowerCase() && a.Ativo;
   })[0];
   return {
     email: email,
