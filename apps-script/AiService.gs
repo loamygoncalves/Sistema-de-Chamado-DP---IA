@@ -93,7 +93,8 @@ function confidenceOf_(result, analyzed, thresholds) {
  * consulta à base faz a IA responder um FAQ aleatório para um "obrigado",
  * que é o comportamento mais robótico que existe.
  *
- * Devolve: 'gratidao' | 'saudacao' | 'despedida' | 'correcao' | 'pergunta'.
+ * Devolve: 'gratidao' | 'saudacao' | 'cortesia' | 'despedida' | 'correcao' |
+ * 'pergunta'.
  */
 var NEGACAO_ = [
   /\bnao (e|era|eh) (isso|essa|esse)\b/, /\bnao (estou|to|tou) (falando|perguntando|querendo)\b/,
@@ -110,6 +111,12 @@ var GRATIDAO_ = [
 
 var SAUDACAO_ = /^\s*(oi|ola|opa|eai|e ai|bom dia|boa tarde|boa noite|hey|hi)\b/;
 var DESPEDIDA_ = /\b(tchau|ate mais|ate logo|falou|flw|xau|ate a proxima)\b/;
+
+// Cortesia social ("tudo bem?", "como vai?"). Parece pergunta e tem ponto
+// de interrogação, mas não é consulta à base — e as palavras dela existem
+// nos FAQs ("em dias de folga, TUDO vira crédito de banco de horas"), então
+// sem esta regra um "tudo bem?" era respondido com o FAQ de banco de horas.
+var CORTESIA_ = /^\s*(e ai\s+)?(tudo (bem|bom|certo|tranquilo|joia)|td (bem|bom)|como (vai|voce esta|vc esta|esta|ta)|beleza|blz|tranquilo)\b/;
 
 function detectIntent_(question, history) {
   var t = ' ' + normalize_(question) + ' ';
@@ -129,6 +136,7 @@ function detectIntent_(question, history) {
     }
   }
   if (SAUDACAO_.test(t) && palavras <= 4) return 'saudacao';
+  if (CORTESIA_.test(normalize_(question)) && palavras <= 5) return 'cortesia';
   if (DESPEDIDA_.test(t) && palavras <= 6) return 'despedida';
   return 'pergunta';
 }
@@ -141,6 +149,12 @@ function smallTalkAnswer_(intent, seed) {
       'Que bom que ajudou! 😊 Fico à disposição — se surgir qualquer outra dúvida de DP, é só me chamar.',
       'Fico feliz em ter ajudado! Se precisar de mais alguma coisa sobre DP, estou por aqui.',
       'Perfeito, era isso mesmo então! Qualquer outra dúvida, é só perguntar.'
+    ], seed);
+  }
+  if (intent === 'cortesia') {
+    return pickVariant_([
+      'Tudo ótimo por aqui, obrigada por perguntar! 😊 Em que posso te ajudar hoje?',
+      'Tudo bem sim, obrigada! E com você? Me diz o que você precisa que eu procuro pra você.'
     ], seed);
   }
   if (intent === 'saudacao') {
@@ -264,7 +278,7 @@ function askAi(question, history) {
   // Antes de qualquer busca: isto é mesmo uma pergunta? Um "obrigado, era
   // isso!" não deve virar consulta à base de conhecimento.
   var intent = detectIntent_(question, recentHistory);
-  if (intent === 'gratidao' || intent === 'saudacao' || intent === 'despedida') {
+  if (intent === 'gratidao' || intent === 'saudacao' || intent === 'despedida' || intent === 'cortesia') {
     return {
       answer: smallTalkAnswer_(intent, question),
       decision: 'conversa', confidence: 1, source: null, options: []
@@ -275,6 +289,17 @@ function askAi(question, history) {
   var analyzed = analyzeQuery_(question, index.vocabulary);
   var thresholds = getThresholds_();
   var isCorrection = intent === 'correcao';
+
+  // Mensagem sem nenhuma palavra de conteúdo ("???", "aaa", só stopwords):
+  // não há o que buscar. Pedir para reformular é mais útil — e menos
+  // estranho — do que oferecer abrir um chamado.
+  if (analyzed.words.length === 0) {
+    return {
+      answer: 'Não consegui entender sua mensagem. Pode escrever com outras palavras o que você precisa? ' +
+        'Posso ajudar com folha de pagamento, férias, benefícios, ponto, documentos e afins.',
+      decision: 'conversa', confidence: 0, source: null, options: []
+    };
+  }
 
   // A pergunta SOZINHA vem primeiro. O histórico só entra se ela não se
   // sustentar por conta própria — senão uma troca clara de assunto ("qual
