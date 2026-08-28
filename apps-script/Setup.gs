@@ -11,20 +11,48 @@ function onOpen() {
     .addToUi();
 }
 
+/**
+ * Insere só o que ainda não existe, comparando pela chave `keyFn`.
+ *
+ * O seed precisa ser ADITIVO, não "tudo ou nada": numa planilha que já
+ * está em uso, uma guarda do tipo `if (getLastRow() < 2)` faz o conteúdo
+ * novo nunca entrar — e, pior, pode deixar estado inconsistente (a aba
+ * Passos nasceria com etapas apontando para um FAQ que não foi inserido).
+ * Rodar de novo depois de uma atualização é seguro e não duplica nada.
+ */
+function seedMissing_(sheet, headers, rows, keyFn) {
+  var existentes = {};
+  rowsAsObjects_(sheet).forEach(function (r) { existentes[keyFn(r)] = true; });
+  var inseridos = 0;
+  rows.forEach(function (row) {
+    if (existentes[keyFn(row)]) return;
+    appendObject_(sheet, row);
+    existentes[keyFn(row)] = true;
+    inseridos++;
+  });
+  return inseridos;
+}
+
+function normalizeKey_(value) {
+  return String(value === undefined || value === null ? '' : value).trim().toLowerCase();
+}
+
 function initializeSpreadsheet() {
+  var novos = 0;
+
   var departamentos = sheet_(SHEETS.DEPARTAMENTOS, HEADERS.Departamentos);
-  if (departamentos.getLastRow() < 2) {
-    SEED_DEPARTMENTS_.forEach(function (d) {
-      appendObject_(departamentos, { Nome: d[0], PrioridadePadrao: d[1], SlaHorasMax: '' });
-    });
-  }
+  novos += seedMissing_(departamentos, HEADERS.Departamentos,
+    SEED_DEPARTMENTS_.map(function (d) {
+      return { Nome: d[0], PrioridadePadrao: d[1], SlaHorasMax: '' };
+    }),
+    function (r) { return normalizeKey_(r.Nome); });
 
   var faqs = sheet_(SHEETS.FAQS, HEADERS.FAQs);
-  if (faqs.getLastRow() < 2) {
-    SEED_FAQS_.forEach(function (f) {
-      appendObject_(faqs, { Pergunta: f.q, Resposta: f.a, Departamento: f.dept });
-    });
-  }
+  novos += seedMissing_(faqs, HEADERS.FAQs,
+    SEED_FAQS_.map(function (f) {
+      return { Pergunta: f.q, Resposta: f.a, Departamento: f.dept };
+    }),
+    function (r) { return normalizeKey_(r.Pergunta); });
 
   var analistas = sheet_(SHEETS.ANALISTAS, HEADERS.Analistas);
   if (analistas.getLastRow() < 2) {
@@ -40,15 +68,15 @@ function initializeSpreadsheet() {
   }
 
   // Passo a passo ilustrado: o FAQ vive na aba FAQs e as etapas na aba
-  // Passos, ligadas pelo texto da Pergunta.
+  // Passos, ligadas pelo texto da Pergunta. A chave é Pergunta+Ordem, para
+  // rodar de novo não duplicar etapa nem apagar o link de imagem que o
+  // time já tiver colado.
   var passos = sheet_(SHEETS.PASSOS, HEADERS.Passos);
-  if (passos.getLastRow() < 2) {
-    SEED_PASSOS_.forEach(function (s) {
-      appendObject_(passos, {
-        Pergunta: s.faq, Ordem: s.ordem, Titulo: s.titulo, Texto: s.texto, Imagem: ''
-      });
-    });
-  }
+  novos += seedMissing_(passos, HEADERS.Passos,
+    SEED_PASSOS_.map(function (s) {
+      return { Pergunta: s.faq, Ordem: s.ordem, Titulo: s.titulo, Texto: s.texto, Imagem: '' };
+    }),
+    function (r) { return normalizeKey_(r.Pergunta) + '#' + normalizeKey_(r.Ordem); });
 
   // Só garante que as abas existem — sem dado de exemplo (nascem vazias).
   sheet_(SHEETS.CHAMADOS, HEADERS.Chamados);
@@ -56,7 +84,9 @@ function initializeSpreadsheet() {
   sheet_(SHEETS.ANEXOS, HEADERS.Anexos);
 
   var doneMessage =
-    'Planilhas prontas!\n\n' +
+    (novos > 0
+      ? 'Planilhas atualizadas! ' + novos + ' item(ns) novo(s) adicionado(s) à base.\n\n'
+      : 'Planilhas já estavam em dia — nada novo a adicionar.\n\n') +
     'Antes de divulgar o link do sistema:\n' +
     '1) Edite a aba "Analistas" com os e-mails reais do time de DP.\n' +
     '2) Para um passo a passo com imagens, use a aba "Passos" (ver README).\n' +
