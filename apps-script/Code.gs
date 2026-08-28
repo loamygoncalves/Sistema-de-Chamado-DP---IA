@@ -129,12 +129,14 @@ function handleAdminRoute_(action, e) {
   if (action === 'diagchamados') {
     var cru = rowsAsObjects_(sheet_(SHEETS.CHAMADOS, HEADERS.Chamados));
     var viaLista = listTickets({});
+    var viaInbox = listTickets({ unassigned: true, mine: false, status: '', overdue: false, pendingAnalyst: false, q: '' });
     var amostra = cru.slice(0, 3).map(function (t) {
       return t.ID + ': status="' + t.Status + '" analista="' + (t.AnalistaResponsavel || '') + '"';
     }).join(' | ');
     return ContentService.createTextOutput(
       'Linhas cruas na aba Chamados: ' + cru.length +
       ' | listTickets({}) devolveu: ' + viaLista.length +
+      ' | listTickets(igual a "Caixa de entrada") devolveu: ' + viaInbox.length +
       ' | amostra: ' + amostra
     );
   }
