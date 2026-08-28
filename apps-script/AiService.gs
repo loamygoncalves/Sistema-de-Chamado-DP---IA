@@ -1,77 +1,44 @@
 /**
- * "IA" deste protótipo, em duas camadas:
+ * Cérebro do atendimento — decide O QUE responder e COMO responder,
+ * usando só a base de conhecimento da empresa (aba FAQs). A parte
+ * linguística (corretor de digitação, sinônimos, ranqueamento) mora em
+ * TextMatch.gs.
  *
- * 1) Casador léxico de FAQs (sempre ativo, sem custo, sem chave de API) —
- *    decide SE existe uma resposta segura na base de conhecimento e com que
- *    confiança, igual ao motor de decisão do sistema real (ver
- *    ai_settings / RAG_CONFIDENCE_THRESHOLDS no backend).
- * 2) Chamada à API da Anthropic (opcional — só roda se ANTHROPIC_API_KEY
- *    estiver definida em Script Properties) para responder de forma
- *    natural e para sintetizar o contexto do chamado para o analista, do
- *    mesmo jeito que o backend real usa um LLM sobre o resultado do RAG.
- *    Sem a chave, cai para o texto literal do FAQ / um resumo simples —
- *    nunca quebra o fluxo.
+ * Roda 100% dentro do Google Workspace, sem custo e sem chamada externa:
+ * nenhum dado de colaborador sai daqui e nenhuma informação vem da
+ * internet — a IA só sabe o que está escrito na aba FAQs.
  *
- * A conversa é multi-turno de verdade: o cliente manda o histórico completo
- * a cada pergunta, e ele vai junto na chamada à Claude — não é só uma pista
- * de busca, é contexto real de conversa (mesmo papel do CHAT_HISTORY do
- * backend). Sem isso, cada pergunta seria respondida isolada, como um
- * chatbot de FAQ raso, sem lembrar do que já foi dito.
+ * O que faz não parecer um chatbot de FAQ:
+ *  - a conversa tem memória (pergunta curta de acompanhamento herda o
+ *    assunto anterior, ex.: "e se eu for plantonista?");
+ *  - quando duas respostas estão empatadas, ela PERGUNTA em vez de
+ *    chutar a errada;
+ *  - a resposta reconhece o assunto entendido e sugere o próximo passo,
+ *    em vez de despejar o texto cru do FAQ;
+ *  - entende quem escreve errado, abrevia ou usa o nome popular das
+ *    coisas (ver o dicionário de sinônimos em TextMatch.gs).
  */
 
-var STOPWORDS_ = [
-  'a', 'o', 'as', 'os', 'de', 'da', 'do', 'das', 'dos', 'e', 'é', 'um', 'uma', 'uns', 'umas', 'para', 'com', 'no',
-  'na', 'em', 'nos', 'nas', 'que', 'como', 'qual', 'quais', 'meu', 'minha', 'meus', 'minhas', 'me', 'eu', 'ao', 'aos', 'à', 'às',
-  'por', 'se', 'tem', 'tenho', 'sobre', 'sua', 'seu', 'suas', 'seus', 'ou'
-];
-
-// Quantas mensagens (colaborador + IA) da conversa entram no contexto da
-// IA — limite para o prompt não crescer sem fim numa conversa longa.
+// Quantas mensagens da conversa entram como contexto — o suficiente para
+// entender um acompanhamento sem carregar a conversa inteira para sempre.
 var CHAT_HISTORY_MAX_MESSAGES = 12;
 
-function normalize_(s) {
-  return String(s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\w\s]/g, ' ');
-}
+// Pergunta com poucas palavras próprias (ex.: "e se for plantonista?") é
+// acompanhamento: sozinha não diz o assunto, precisa herdar o anterior.
+var FOLLOW_UP_MAX_TOKENS = 4;
 
-function tokenize_(s) {
-  return normalize_(s).split(/\s+/).filter(function (w) { return w.length > 2 && STOPWORDS_.indexOf(w) === -1; });
-}
-
-function overlap_(tokensA, tokensB) {
-  var n = 0;
-  tokensA.forEach(function (x) { if (tokensB.indexOf(x) !== -1) n++; });
-  return n;
-}
-
-function rawScore_(faq, tokens) {
-  var qTok = tokenize_(faq.Pergunta);
-  var aTok = tokenize_(faq.Resposta);
-  return (2 * overlap_(tokens, qTok) + overlap_(tokens, aTok)) / (tokens.length + qTok.length + 1);
-}
-
-function scoreToConfidence_(raw) {
-  return Math.max(0, Math.min(0.97, Math.pow(raw * 1.55, 0.72)));
-}
-
-function retrieveFaqs_(searchText, topN) {
-  var tokens = tokenize_(searchText);
-  var faqs = rowsAsObjects_(sheet_(SHEETS.FAQS, HEADERS.FAQs));
-  if (tokens.length === 0 || faqs.length === 0) return [];
-  var scored = faqs.map(function (f) { return { faq: f, raw: rawScore_(f, tokens) }; });
-  scored.sort(function (a, b) { return b.raw - a.raw; });
-  return scored.slice(0, topN || 3);
-}
+// Se o 2º colocado chega perto do 1º, é ambiguidade de verdade — melhor
+// perguntar do que arriscar a resposta errada.
+var AMBIGUITY_RATIO = 0.82;
 
 function getThresholds_() {
   var props = PropertiesService.getScriptProperties();
   return {
-    auto: Number(props.getProperty('AUTO_THRESHOLD') || 0.85),
-    suggest: Number(props.getProperty('SUGGEST_THRESHOLD') || 0.60)
+    auto: Number(props.getProperty('AUTO_THRESHOLD') || 0.45),
+    suggest: Number(props.getProperty('SUGGEST_THRESHOLD') || 0.22)
   };
 }
 
-/** Recorta e normaliza o histórico recebido do cliente: só os últimos
- * CHAT_HISTORY_MAX_MESSAGES turnos, só {role, content} válidos. */
 function normalizeHistory_(history) {
   if (!history || !history.length) return [];
   return history
@@ -80,144 +47,212 @@ function normalizeHistory_(history) {
     .map(function (h) { return { role: h.role, content: String(h.content) }; });
 }
 
-/** `history` é a conversa inteira até aqui (sem incluir `question`) — usada
- * para ACHAR a fonte certa num acompanhamento ("e isso muda se eu...") e
- * para a Claude manter o fio da conversa de verdade. A CONFIANÇA, porém, é
- * medida só contra a pergunta atual — senão o histórico carregado infla o
- * score e uma pergunta solta, feita logo depois de uma boa resposta,
- * pareceria "resposta automática". */
-function askAi(question, history) {
-  var recentHistory = normalizeHistory_(history);
-  var recentText = recentHistory.map(function (h) { return h.content; }).join(' ');
-  var searchText = recentText ? (recentText + ' ' + question) : question;
-  var candidates = retrieveFaqs_(searchText, 3);
-  var best = candidates[0];
-  var confidence = best ? scoreToConfidence_(rawScore_(best.faq, tokenize_(question))) : 0;
-
-  if (!best || confidence < 0.12) {
-    return {
-      answer: 'Não encontrei informação suficiente na base de conhecimento para responder com segurança.',
-      decision: 'auto_ticket', confidence: 0, source: null
-    };
-  }
-
-  var thresholds = getThresholds_();
-  var decision = 'auto_ticket';
-  if (confidence > thresholds.auto) decision = 'auto_answer';
-  else if (confidence >= thresholds.suggest) decision = 'suggest_ticket';
-
-  var answerText = best.faq.Resposta;
-  var apiKey = PropertiesService.getScriptProperties().getProperty('ANTHROPIC_API_KEY');
-  if (apiKey) {
-    try {
-      answerText = rephraseWithClaude_(apiKey, question, candidates.map(function (c) { return c.faq; }), recentHistory);
-    } catch (e) {
-      Logger.log('Falha ao chamar a IA, usando resposta literal do FAQ: ' + e);
-    }
-  }
-  return {
-    answer: answerText, decision: decision, confidence: confidence,
-    source: { department: best.faq.Departamento, question: best.faq.Pergunta }
-  };
+/** Últimas perguntas do colaborador — é delas que um acompanhamento
+ * herda o assunto (a resposta da IA não, senão o texto longo do FAQ
+ * dominaria a busca e o assunto nunca mudaria). */
+function previousUserQuestions_(history, limit) {
+  return history
+    .filter(function (h) { return h.role === 'user'; })
+    .slice(-(limit || 2))
+    .map(function (h) { return h.content; });
 }
 
-/** `claude-opus-5` é o modelo padrão recomendado para uso com a API da
- * Anthropic. Sem parâmetro `thinking` explícito, o Opus 5 já roda com
- * pensamento adaptativo por padrão — por isso a resposta pode trazer um
- * bloco `thinking` antes do bloco de texto; nunca presuma que o texto está
- * em `content[0]`, sempre filtre por `type === 'text'`.
- * `messages` já é o array completo no formato da API ([{role, content}, ...]),
- * terminando no turno atual do usuário — quem monta isso é o chamador. */
-function callClaude_(apiKey, systemPrompt, messages, maxTokens) {
-  var payload = {
-    model: 'claude-opus-5',
-    max_tokens: maxTokens || 500,
-    messages: messages
-  };
-  if (systemPrompt) payload.system = systemPrompt;
-  var response = UrlFetchApp.fetch('https://api.anthropic.com/v1/messages', {
-    method: 'post',
-    contentType: 'application/json',
-    headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
-    payload: JSON.stringify(payload),
-    muteHttpExceptions: true
-  });
-  var json = JSON.parse(response.getContentText());
-  if (json.error) throw new Error('Erro da API da Anthropic: ' + (json.error.message || JSON.stringify(json.error)));
-  var textBlock = (json.content || []).filter(function (b) { return b.type === 'text'; })[0];
-  if (textBlock) return textBlock.text.trim();
-  throw new Error('Resposta inesperada da API da Anthropic: ' + response.getContentText());
+/** Escolhe uma variação de forma estável: a mesma pergunta gera sempre a
+ * mesma resposta (previsível para o colaborador e para o suporte), mas
+ * perguntas diferentes variam o texto — o que tira a cara de robô. */
+function pickVariant_(options, seedText) {
+  var seed = 0;
+  var text = String(seedText || '');
+  for (var i = 0; i < text.length; i++) seed = (seed * 31 + text.charCodeAt(i)) % 100000;
+  return options[seed % options.length];
 }
 
-/** Responde SÓ com base nos FAQs recuperados — nunca inventa dado que não
- * esteja no contexto (mesma regra do prompt do backend real). `history`
- * (já normalizado) entra como turnos de verdade antes da pergunta atual,
- * para a conversa fluir — um "e isso muda se eu for autônomo?" só faz
- * sentido pra Claude se ela viu a pergunta anterior. */
-function rephraseWithClaude_(apiKey, question, faqs, history) {
-  var context = faqs.map(function (f, i) { return (i + 1) + '. P: ' + f.Pergunta + '\nR: ' + f.Resposta; }).join('\n\n');
-  var systemPrompt =
-    'Você é a assistente de RH da Beep Saúde, conversando com um colaborador. Responda usando SOMENTE as ' +
-    'informações do contexto abaixo (o contexto pode mudar a cada pergunta, conforme o assunto da conversa). ' +
-    'Não invente nenhum dado (valores, prazos, regras) que não esteja no contexto. Considere o histórico da ' +
-    'conversa para entender perguntas de acompanhamento (ex.: "e se eu for autônomo?"). Seja direta e ' +
-    'acolhedora, em português do Brasil, em até 4 frases.\n\nContexto para esta pergunta:\n' + context;
-  var messages = (history || []).map(function (h) { return { role: h.role, content: h.content }; });
-  messages.push({ role: 'user', content: question });
-  return callClaude_(apiKey, systemPrompt, messages, 400);
-}
+/** Monta a resposta com cara de conversa: reconhece o assunto, entrega o
+ * conteúdo da base e abre o próximo passo. O conteúdo em si é sempre o
+ * texto do FAQ — nada é inventado. */
+function composeAnswer_(faq, opts) {
+  opts = opts || {};
+  var dept = faq.Departamento || 'Departamento Pessoal';
+  var body = String(faq.Resposta).trim();
+  var seed = opts.seed || faq.Pergunta;
+  var parts = [];
 
-function summarizeHistoryForDraft_(history) {
-  if (!history || !history.length) return '';
-  var lines = history.map(function (h) {
-    return (h.role === 'user' ? 'Colaborador: ' : 'IA: ') + h.content;
-  });
-  return 'Conversa até aqui:\n' + lines.join('\n');
-}
-
-function buildFallbackDraft_(question, sourceFaqQuestion, history) {
-  var parts = ['Colaborador relata a seguinte dúvida: "' + question + '"'];
-  if (sourceFaqQuestion) {
-    parts.push(
-      'A IA reconheceu o assunto como relacionado a "' + sourceFaqQuestion + '", mas o colaborador confirmou ' +
-      'que a resposta não resolveu o caso dele — indício de alguma particularidade não coberta pela resposta genérica.'
-    );
+  if (opts.isFollowUp) {
+    parts.push(pickVariant_([
+      'Complementando o que falamos sobre ' + dept + ':',
+      'Ainda sobre ' + dept + ':',
+      'Seguindo no mesmo assunto (' + dept + '):'
+    ], seed));
+  } else if (opts.confident) {
+    parts.push(pickVariant_([
+      'Sobre ' + dept + ' — aqui vai:',
+      'Essa é sobre ' + dept + '. Olha só:',
+      'Isso é tema de ' + dept + ':'
+    ], seed));
   } else {
-    parts.push('A IA não encontrou uma resposta segura na base de conhecimento para esse assunto.');
+    // Confiança média: assume menos, deixa claro o que entendeu, para o
+    // colaborador conseguir corrigir o rumo em vez de aceitar algo errado.
+    parts.push(pickVariant_([
+      'Pelo que entendi, sua dúvida é sobre ' + dept + '. Se for isso:',
+      'Acho que você está perguntando sobre ' + dept + ':',
+      'Entendi como um assunto de ' + dept + '. Veja se ajuda:'
+    ], seed));
   }
-  var historySummary = summarizeHistoryForDraft_(history);
-  if (historySummary) parts.push(historySummary);
-  parts.push('Recomenda-se avaliar o caso individualmente antes de responder.');
+
+  parts.push(body);
+
+  if (!opts.confident) {
+    parts.push('Se não era bem isso, me explica com outras palavras que eu procuro de novo.');
+  }
   return parts.join('\n\n');
 }
 
-/** Sintetiza o contexto do chamado para o analista — o mesmo papel que
- * `draft_ticket_context` cumpre no backend real. `history` é a conversa
- * inteira até a pergunta que motivou a abertura do chamado. Sem chave de
- * API, cai para um resumo estruturado simples (nunca transcreve a
- * conversa crua). */
+/**
+ * Responde à pergunta do colaborador.
+ *
+ * `history` é a conversa até aqui (sem a pergunta atual). Ela serve para
+ * dois fins: entender acompanhamento ("e no meu caso?") e não repetir o
+ * que já foi dito. A CONFIANÇA, porém, é medida só contra a pergunta
+ * atual — senão o contexto herdado inflaria o score e uma pergunta solta
+ * feita depois de uma boa resposta pareceria bem respondida.
+ *
+ * Retorna {answer, decision, confidence, source, options}:
+ *  - auto_answer   → a base respondeu bem
+ *  - clarify       → empate real; `options` traz as opções para escolher
+ *  - suggest_ticket→ respondeu, mas sem segurança total
+ *  - auto_ticket   → a base não cobre o assunto
+ */
+function askAi(question, history) {
+  var recentHistory = normalizeHistory_(history);
+  var faqs = rowsAsObjects_(sheet_(SHEETS.FAQS, HEADERS.FAQs)).filter(function (f) {
+    return f.Pergunta && f.Resposta;
+  });
+
+  if (faqs.length === 0) {
+    return {
+      answer: 'A base de conhecimento ainda está vazia, então não consigo responder com segurança. Posso abrir um chamado para um analista do DP te ajudar.',
+      decision: 'auto_ticket', confidence: 0, source: null, options: []
+    };
+  }
+
+  var index = buildIndex_(faqs);
+  var analyzed = analyzeQuery_(question, index.vocabulary);
+
+  // Acompanhamento: pergunta curta demais para dizer o assunto sozinha —
+  // reaproveita as perguntas anteriores para não perder o fio.
+  var isFollowUp = analyzed.tokens.length > 0 &&
+    analyzed.tokens.length <= FOLLOW_UP_MAX_TOKENS &&
+    recentHistory.length > 0;
+
+  var searchTokens = analyzed.tokens;
+  if (isFollowUp) {
+    var previous = previousUserQuestions_(recentHistory, 2).join(' ');
+    if (previous) {
+      searchTokens = analyzed.tokens.concat(analyzeQuery_(previous, index.vocabulary).tokens);
+    }
+  }
+
+  var ranked = rankDocuments_(searchTokens, index);
+  if (ranked.length === 0) {
+    return {
+      answer: 'Não encontrei nada sobre isso na nossa base de conhecimento, então prefiro não arriscar uma resposta errada. Quer que eu abra um chamado para um analista do DP?',
+      decision: 'auto_ticket', confidence: 0, source: null, options: []
+    };
+  }
+
+  var best = ranked[0];
+  // A confiança sai da cobertura medida contra a PERGUNTA ATUAL, não
+  // contra o texto herdado do histórico.
+  var ownRanking = isFollowUp ? rankDocuments_(analyzed.tokens, index) : ranked;
+  var ownBest = null;
+  for (var i = 0; i < ownRanking.length; i++) {
+    if (ownRanking[i].faq === best.faq) { ownBest = ownRanking[i]; break; }
+  }
+  // Confiança combina duas perguntas diferentes e igualmente necessárias:
+  // "achei o que ele perguntou?" (coverage) e "este FAQ é mesmo sobre
+  // isso?" (focus). Só a primeira não basta: um FAQ que menciona as
+  // palavras de passagem teria coverage alta e responderia com segurança
+  // algo que não é do assunto.
+  var reference = ownBest || best;
+  var rawConfidence = reference.coverage * (0.5 + 0.5 * reference.focus);
+  var confidence = (isFollowUp && !ownBest) ? rawConfidence * 0.85 : rawConfidence;
+
+  var thresholds = getThresholds_();
+
+  // Freio para a frase longa em que quase nada foi reconhecido: em "qual o
+  // horário do ônibus 372?" o sistema entende apenas "ônibus" e responderia
+  // sobre vale-transporte com toda a certeza. Aqui ele ainda mostra o que
+  // achou, mas com ressalva e oferecendo o chamado. O freio não vale para
+  // perguntas curtas ("holerite errado"), em que uma palavra reconhecida
+  // já é a pergunta inteira.
+  if (analyzed.words.length >= 3 && analyzed.recognition < 0.5) {
+    confidence = Math.min(confidence, thresholds.auto - 0.01);
+  }
+
+  if (confidence < thresholds.suggest) {
+    return {
+      answer: 'Entendi mais ou menos o que você precisa, mas não achei na base algo que responda com segurança — e prefiro não chutar. Quer que eu abra um chamado para um analista do DP olhar seu caso?',
+      decision: 'auto_ticket', confidence: confidence,
+      source: { department: best.faq.Departamento, question: best.faq.Pergunta }, options: []
+    };
+  }
+
+  // Empate real entre dois assuntos: perguntar é melhor que adivinhar.
+  var runnerUp = ranked[1];
+  if (runnerUp && best.score > 0 && (runnerUp.score / best.score) >= AMBIGUITY_RATIO &&
+      runnerUp.faq.Departamento !== best.faq.Departamento) {
+    return {
+      answer: 'Sua pergunta pode ser sobre dois assuntos diferentes e não quero te dar a resposta errada. Qual deles é o seu caso?',
+      decision: 'clarify', confidence: confidence,
+      source: { department: best.faq.Departamento, question: best.faq.Pergunta },
+      options: [
+        { label: best.faq.Departamento + ' — ' + best.faq.Pergunta, question: best.faq.Pergunta },
+        { label: runnerUp.faq.Departamento + ' — ' + runnerUp.faq.Pergunta, question: runnerUp.faq.Pergunta }
+      ]
+    };
+  }
+
+  var confident = confidence >= thresholds.auto;
+  return {
+    answer: composeAnswer_(best.faq, { confident: confident, isFollowUp: isFollowUp, seed: question }),
+    decision: confident ? 'auto_answer' : 'suggest_ticket',
+    confidence: confidence,
+    source: { department: best.faq.Departamento, question: best.faq.Pergunta },
+    options: []
+  };
+}
+
+/**
+ * Resumo do caso para o analista, montado a partir da conversa real —
+ * sem transcrever tudo. Escrito por regra (não por LLM): identifica o
+ * assunto, lista o que o colaborador perguntou e aponta o que a base já
+ * cobriu, para o analista saber de onde partir.
+ */
 function draftTicketContext(question, sourceFaqQuestion, history) {
   var recentHistory = normalizeHistory_(history);
-  var fallback = buildFallbackDraft_(question, sourceFaqQuestion, recentHistory);
-  var apiKey = PropertiesService.getScriptProperties().getProperty('ANTHROPIC_API_KEY');
-  if (!apiKey) return fallback;
-  try {
-    var transcript = recentHistory.map(function (h) {
-      return (h.role === 'user' ? 'Colaborador: ' : 'IA: ') + h.content;
-    }).join('\n');
-    var prompt =
-      (transcript ? 'Conversa até aqui:\n' + transcript + '\n\n' : '') +
-      'Pergunta que motivou a abertura do chamado: "' + question + '"\n' +
-      (sourceFaqQuestion
-        ? 'A IA reconheceu o assunto como relacionado a "' + sourceFaqQuestion + '", mas isso não resolveu o caso.\n'
-        : 'A IA não encontrou uma resposta segura para essa pergunta.\n') +
-      'O colaborador confirmou que quer abrir um chamado.\n\n' +
-      'Escreva, em português do Brasil, um resumo de 2 a 3 parágrafos para o analista de RH entender o caso ' +
-      'rapidamente. Não transcreva a conversa literalmente — sintetize, dê contexto e destaque o que precisa ' +
-      'de atenção. Não inclua saudação nem assinatura, só o resumo.';
-    return callClaude_(apiKey, null, [{ role: 'user', content: prompt }], 700);
-  } catch (e) {
-    Logger.log('Falha ao gerar resumo com IA, usando resumo padrão: ' + e);
-    return fallback;
+  var perguntas = previousUserQuestions_(recentHistory, 5);
+  var parts = [];
+
+  parts.push('Resumo automático da conversa com a IA (a IA não conseguiu resolver o caso).');
+  parts.push('Dúvida principal do colaborador:\n"' + String(question).trim() + '"');
+
+  if (perguntas.length > 0) {
+    var anteriores = perguntas.filter(function (p) { return p.trim() !== String(question).trim(); });
+    if (anteriores.length > 0) {
+      parts.push('Outras perguntas feitas na mesma conversa:\n' +
+        anteriores.map(function (p) { return '• ' + p.trim(); }).join('\n'));
+    }
   }
+
+  if (sourceFaqQuestion) {
+    parts.push('A IA identificou o assunto como relacionado a "' + sourceFaqQuestion + '" e apresentou a ' +
+      'orientação padrão desse tema, mas o colaborador indicou que isso não resolveu o caso dele — ' +
+      'provavelmente há uma particularidade (valor, data, situação específica) que a resposta genérica não cobre.');
+  } else {
+    parts.push('A base de conhecimento não cobre esse assunto — pode ser um caso novo, ainda não documentado ' +
+      'nas políticas e FAQs. Vale avaliar se cabe virar um novo item da base depois de resolvido.');
+  }
+
+  parts.push('Sugestão: confirmar com o colaborador os dados específicos do caso antes de concluir a análise.');
+  return parts.join('\n\n');
 }

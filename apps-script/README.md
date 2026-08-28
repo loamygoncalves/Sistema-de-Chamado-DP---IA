@@ -8,13 +8,21 @@ para manter — só uma cópia da planilha e um deploy de app da Web.
 
 ## O que este protótipo tem
 
-- Chat com IA (casador léxico de FAQs, igual ao motor de decisão do sistema
-  real) com memória de conversa de verdade — perguntas de acompanhamento
-  ("e isso muda se eu for autônomo?") levam em conta o que já foi dito,
-  até o colaborador clicar em "Encerrar conversa" para começar do zero em
-  outro assunto — e abertura de chamado guiada: nome/matrícula
-  pré-preenchidos, escolha da fila, resumo do caso escrito pela IA para o
-  analista confirmar, e anexo de arquivo (guardado no Google Drive).
+- **Chat com IA própria, sem custo e sem nuvem externa** (`TextMatch.gs` +
+  `AiService.gs`): nada sai do Google Workspace e nada vem da internet — a
+  IA só sabe o que está escrito na aba `FAQs`. Ela entende o colaborador
+  mesmo quando ele escreve errado ou informal, porque combina quatro
+  camadas: correção de digitação (distância de edição contra o vocabulário
+  real da base), dicionário de sinônimos do DP ("holerite" → contracheque,
+  "VR" → vale refeição, "convênio" → plano de saúde), stemming leve
+  (plural/sufixo deixam de atrapalhar) e ranqueamento BM25 com IDF. Além
+  disso: tem memória de conversa (acompanhamento como "e se eu for
+  plantonista?" herda o assunto anterior), **pergunta em vez de chutar**
+  quando dois assuntos empatam, e o colaborador pode clicar em "Encerrar
+  conversa" para mudar de assunto do zero.
+- Abertura de chamado guiada: nome/matrícula pré-preenchidos, escolha da
+  fila, resumo do caso montado a partir da conversa para o analista, e
+  anexo de arquivo (guardado no Google Drive).
 - Fila do analista com caixa de entrada geral, aba "Meus atendimentos",
   busca e filtros de atrasados / pendente interação do analista.
 - Status automático: nasce em "Em triagem", vira "Em atendimento" ao ser
@@ -26,9 +34,20 @@ para manter — só uma cópia da planilha e um deploy de app da Web.
 
 ## O que este protótipo NÃO tem (limitações do Apps Script)
 
-- **Sem RAG vetorial** — a recuperação de FAQ é por casamento de palavras
-  (léxico), não por embeddings. Funciona bem para uma base pequena de FAQs,
-  mas não escala como o RAG do backend real.
+- **Não é um modelo de linguagem (LLM)** — a IA não *gera* texto novo: ela
+  entende a pergunta e entrega o conteúdo que está na base, com uma
+  abertura que reconhece o assunto. Ela nunca inventa valor, prazo ou
+  regra que não esteja escrito na aba `FAQs` — o que é exatamente a
+  garantia que se quer num sistema de DP, mas significa que ela não
+  redige explicações originais nem raciocina sobre casos novos.
+- **A qualidade depende da base** — como ela só sabe o que está na aba
+  `FAQs`, a forma de deixá-la mais inteligente é adicionar FAQs (e
+  sinônimos novos em `SYNONYMS_`, no `TextMatch.gs`), não trocar de
+  algoritmo. Quando um chamado revelar uma dúvida recorrente que a base
+  não cobria, vale virar um FAQ novo.
+- **Sem RAG vetorial** — a recuperação é léxica (palavras), não por
+  embeddings. Funciona bem para uma base de dezenas/centenas de FAQs, mas
+  não escala como o RAG do backend real.
 - **Sem fila assíncrona** — tudo roda de forma síncrona na mesma execução
   (limite de 6 minutos por chamada do Apps Script).
 - **SLA simplificado** — pula sábado/domingo, mas não feriados nacionais
@@ -68,17 +87,13 @@ time ou rodar num piloto pequeno sem precisar de infraestrutura própria.
 7. **Edite a aba "Analistas"** com os e-mails reais do time de DP (coluna
    `Email`, `Ativo = TRUE`). Quem estiver nessa lista vê a tela de analista
    ao abrir o link; quem não estiver vê a tela de colaborador.
-8. **(Opcional, mas recomendado)** Em **Configurações do projeto >
-   Propriedades do script**, adicione:
-   - `ANTHROPIC_API_KEY` — sua chave da API da Anthropic (usa o modelo
-     `claude-opus-5`; para trocar o modelo, edite `callClaude_` em
-     `AiService.gs`). Sem a chave, o protótipo continua funcionando, só que
-     as respostas da IA e o resumo do chamado ficam mais literais (direto do
-     FAQ / template simples) em vez de
-     escritos por um modelo de linguagem de verdade.
-   - `AUTO_THRESHOLD` / `SUGGEST_THRESHOLD` — opcionais, de 0 a 1, para
-     ajustar os limiares de confiança (padrão 0.85 / 0.60, iguais ao sistema
-     real).
+8. **(Opcional)** Em **Configurações do projeto > Propriedades do script**:
+   - `AUTO_THRESHOLD` / `SUGGEST_THRESHOLD` — de 0 a 1 (padrão `0.45` e
+     `0.22`). Acima de `AUTO_THRESHOLD` a IA responde direto; entre os dois
+     ela responde com ressalva e oferece chamado; abaixo do menor ela não
+     arrisca e vai direto para o chamado. **Suba** o `AUTO_THRESHOLD` se
+     ela estiver respondendo com confiança demais; **desça** se estiver
+     mandando para chamado coisas que a base já responde.
    - `EMAIL_NOTIFICATIONS_ENABLED` — defina como `false` para desligar os
      e-mails (por padrão estão ligados).
 9. **Implante como app da Web**: no editor, **Implantar > Nova implantação**
