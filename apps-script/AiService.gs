@@ -67,6 +67,56 @@ function pickVariant_(options, seedText) {
   return options[seed % options.length];
 }
 
+/**
+ * Confiança de um resultado, combinando três perguntas:
+ *  - "achei o que ele perguntou?"     → coverage
+ *  - "este FAQ é mesmo sobre isso?"   → focus
+ *  - "entendi a frase que ele digitou?" → recognition
+ *
+ * A terceira é o freio contra a frase longa em que só uma palavra foi
+ * reconhecida: em "qual o horário do ônibus 372?" o sistema entende
+ * apenas "ônibus" e, sem esse freio, responderia sobre vale-transporte
+ * com toda a certeza do mundo. Não vale para perguntas curtas, em que
+ * uma palavra reconhecida já é a pergunta inteira.
+ */
+function confidenceOf_(result, analyzed, thresholds) {
+  var value = result.coverage * (0.5 + 0.5 * result.focus);
+  if (analyzed.words.length >= 3 && analyzed.recognition < 0.5) {
+    value = Math.min(value, thresholds.auto - 0.01);
+  }
+  return value;
+}
+
+/**
+ * A pergunta aponta para algo já dito? "Como eu consigo ESSE e-mail?",
+ * "e ISSO muda se...", "como faço NESSE caso?" — o pronome demonstrativo
+ * é a marca de que a frase não se explica sozinha.
+ *
+ * Sem esse sinal, "como consigo esse e-mail?" casa com os FAQs de
+ * TotalPass/Gympass (que também falam em "e-mail") e a conversa pula para
+ * um assunto que o colaborador não perguntou. Com ele, a frase é lida
+ * como continuação — e, se a base já tiver dito o que tinha, cai no
+ * caminho honesto de oferecer o analista.
+ */
+function isReferential_(question) {
+  var text = ' ' + normalize_(question) + ' ';
+  return /\s(esse|essa|isso|esses|essas|desse|dessa|nesse|nessa|disso|dele|dela|deles|delas)\s/.test(text) ||
+    /^\s*e\s/.test(text);
+}
+
+/** Este FAQ já foi entregue nesta conversa? Compara o começo do texto da
+ * resposta com o que a IA já disse — se a pessoa insiste no assunto, é
+ * porque a base não tem o detalhe que ela quer, e repetir não ajuda. */
+function alreadyAnswered_(faq, history) {
+  var body = String(faq.Resposta).trim();
+  if (body.length < 40) return false;
+  var fingerprint = body.substring(0, 60);
+  for (var i = 0; i < history.length; i++) {
+    if (history[i].role === 'assistant' && history[i].content.indexOf(fingerprint) !== -1) return true;
+  }
+  return false;
+}
+
 /** Monta a resposta com cara de conversa: reconhece o assunto, entrega o
  * conteúdo da base e abre o próximo passo. O conteúdo em si é sempre o
  * texto do FAQ — nada é inventado. */
@@ -137,22 +187,34 @@ function askAi(question, history) {
 
   var index = buildIndex_(faqs);
   var analyzed = analyzeQuery_(question, index.vocabulary);
+  var thresholds = getThresholds_();
 
-  // Acompanhamento: pergunta curta demais para dizer o assunto sozinha —
-  // reaproveita as perguntas anteriores para não perder o fio.
-  var isFollowUp = analyzed.tokens.length > 0 &&
-    analyzed.tokens.length <= FOLLOW_UP_MAX_TOKENS &&
-    recentHistory.length > 0;
+  // A pergunta SOZINHA vem primeiro. O histórico só entra se ela não se
+  // sustentar por conta própria — senão uma troca clara de assunto ("qual
+  // dia cai o salário?" depois de uma conversa sobre ponto) fica presa no
+  // assunto anterior, que é exatamente o que acontecia antes desta ordem.
+  var ranked = rankDocuments_(analyzed.tokens, index);
+  var confidence = ranked.length ? confidenceOf_(ranked[0], analyzed, thresholds) : 0;
+  var isFollowUp = false;
 
-  var searchTokens = analyzed.tokens;
-  if (isFollowUp) {
+  var needsContext = confidence < thresholds.suggest || isReferential_(question);
+  if (needsContext && recentHistory.length > 0) {
+    // Aí sim: pergunta que não diz o assunto sozinha ("e no meu caso?",
+    // "como consigo isso?") herda o contexto das perguntas anteriores.
     var previous = previousUserQuestions_(recentHistory, 2).join(' ');
     if (previous) {
-      searchTokens = analyzed.tokens.concat(analyzeQuery_(previous, index.vocabulary).tokens);
+      var merged = analyzed.tokens.concat(analyzeQuery_(previous, index.vocabulary).tokens);
+      var withHistory = rankDocuments_(merged, index);
+      if (withHistory.length) {
+        ranked = withHistory;
+        isFollowUp = true;
+        // Confiança de acompanhamento é sempre mais baixa: quem respondeu
+        // foi o contexto, não a frase que a pessoa escreveu.
+        confidence = confidenceOf_(withHistory[0], analyzed, thresholds) * 0.85 + 0.25;
+      }
     }
   }
 
-  var ranked = rankDocuments_(searchTokens, index);
   if (ranked.length === 0) {
     return {
       answer: 'Não encontrei nada sobre isso na nossa base de conhecimento, então prefiro não arriscar uma resposta errada. Quer que eu abra um chamado para um analista do DP?',
@@ -161,32 +223,20 @@ function askAi(question, history) {
   }
 
   var best = ranked[0];
-  // A confiança sai da cobertura medida contra a PERGUNTA ATUAL, não
-  // contra o texto herdado do histórico.
-  var ownRanking = isFollowUp ? rankDocuments_(analyzed.tokens, index) : ranked;
-  var ownBest = null;
-  for (var i = 0; i < ownRanking.length; i++) {
-    if (ownRanking[i].faq === best.faq) { ownBest = ownRanking[i]; break; }
-  }
-  // Confiança combina duas perguntas diferentes e igualmente necessárias:
-  // "achei o que ele perguntou?" (coverage) e "este FAQ é mesmo sobre
-  // isso?" (focus). Só a primeira não basta: um FAQ que menciona as
-  // palavras de passagem teria coverage alta e responderia com segurança
-  // algo que não é do assunto.
-  var reference = ownBest || best;
-  var rawConfidence = reference.coverage * (0.5 + 0.5 * reference.focus);
-  var confidence = (isFollowUp && !ownBest) ? rawConfidence * 0.85 : rawConfidence;
 
-  var thresholds = getThresholds_();
-
-  // Freio para a frase longa em que quase nada foi reconhecido: em "qual o
-  // horário do ônibus 372?" o sistema entende apenas "ônibus" e responderia
-  // sobre vale-transporte com toda a certeza. Aqui ele ainda mostra o que
-  // achou, mas com ressalva e oferecendo o chamado. O freio não vale para
-  // perguntas curtas ("holerite errado"), em que uma palavra reconhecida
-  // já é a pergunta inteira.
-  if (analyzed.words.length >= 3 && analyzed.recognition < 0.5) {
-    confidence = Math.min(confidence, thresholds.auto - 0.01);
+  // Se este FAQ já foi entregue nesta conversa, repeti-lo palavra por
+  // palavra não responde nada — foi o que aconteceu quando o colaborador
+  // perguntou "como consigo esse e-mail?" e recebeu o mesmo texto de novo.
+  // A base já deu o que tinha sobre o assunto: o honesto é dizer isso e
+  // oferecer o analista.
+  if (alreadyAnswered_(best.faq, recentHistory)) {
+    return {
+      answer: 'Sobre ' + (best.faq.Departamento || 'esse assunto') + ' eu já te passei tudo o que a nossa base tem — ' +
+        'ela não detalha esse ponto específico que você está perguntando agora. Para não te dar uma resposta ' +
+        'incompleta, o melhor caminho é um analista do DP olhar o seu caso. Quer que eu abra o chamado?',
+      decision: 'auto_ticket', confidence: confidence,
+      source: { department: best.faq.Departamento, question: best.faq.Pergunta }, options: []
+    };
   }
 
   if (confidence < thresholds.suggest) {
