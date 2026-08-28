@@ -366,6 +366,15 @@ function getTicketDetail(ticketId) {
  * department, overdue, pendingAnalyst, q}. Colaborador só vê os próprios
  * chamados, independente dos filtros — os filtros de fila (caixa de
  * entrada etc.) só valem para analistas. */
+/** Teste temporário: isola se o problema no round-trip do google.script.run
+ * é o campo de data. Remover depois de achar a causa. */
+function debugEchoComData_() {
+  return [{ id: '1', quando: new Date() }, { id: '2', quando: new Date() }];
+}
+function debugEchoSemData_() {
+  return [{ id: '1', quando: 'agora' }, { id: '2', quando: 'antes' }];
+}
+
 function listTickets(filters) {
   filters = filters || {};
   var user = getCurrentUser();

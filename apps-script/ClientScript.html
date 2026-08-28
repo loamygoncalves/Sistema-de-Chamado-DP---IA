@@ -513,11 +513,27 @@
       })));
     var filterRow = el('div', { class: 'toolbar' }, [overdueChip, pendingChip, searchInput, statusSelect]);
 
+    var debugOut = el('p', { style: 'font-size:11.5px; color:var(--ink-soft);' }, []);
+    var debugBtn = el('button', {
+      class: 'chip', onclick: async function () {
+        debugOut.textContent = 'testando...';
+        try {
+          var comData = await call('debugEchoComData_');
+          var semData = await call('debugEchoSemData_');
+          debugOut.textContent = 'com data: ' + JSON.stringify(comData) + ' | sem data: ' + JSON.stringify(semData);
+        } catch (e) {
+          debugOut.textContent = 'erro no teste: ' + errorMessage(e);
+        }
+      }
+    }, ['Testar RPC (debug, remover depois)']);
+
     var list = el('div', { class: 'stack' });
 
     root.appendChild(heading);
     root.appendChild(tabsRow);
     root.appendChild(filterRow);
+    root.appendChild(debugBtn);
+    root.appendChild(debugOut);
     root.appendChild(list);
 
     async function refreshList() {
