@@ -74,19 +74,28 @@ var MOTIVOS_ENCERRAMENTO = {
    ============================================================ */
 
 /**
- * Rotas de administração, disponíveis SÓ para o dono do app (quem publicou
- * a implantação). Servem para atualizar a base sem abrir o editor de
- * script — útil depois de uma atualização que traga conteúdo novo.
+ * Rotas de administração, disponíveis só para o dono do app (quem publicou
+ * a implantação) ou para quem estiver ativo na aba "Analistas". Servem para
+ * atualizar a base sem abrir o editor de script — útil depois de uma
+ * atualização que traga conteúdo novo.
  *
- * A checagem é simples e forte: o app roda "como" o dono, então
- * getEffectiveUser() é sempre ele; getActiveUser() é quem está chamando.
- * Só quando os dois são a mesma pessoa a rota executa. Para qualquer
+ * O app roda "como" o dono, então getEffectiveUser() é sempre ele;
+ * getActiveUser() é quem está chamando. Se forem a mesma pessoa, libera.
+ * Caso contrário, libera também se quem chamou estiver na aba Analistas
+ * (equipe de DP com acesso de edição à planilha/projeto). Para qualquer
  * outro colaborador o parâmetro é ignorado e ele vê o sistema normal.
  */
 function handleAdminRoute_(action, e) {
   var dono = Session.getEffectiveUser().getEmail();
   var chamador = Session.getActiveUser().getEmail();
-  if (!chamador || !dono || chamador.toLowerCase() !== dono.toLowerCase()) {
+  if (!chamador || !dono) {
+    return ContentService.createTextOutput('Rota restrita ao dono do aplicativo.');
+  }
+  var ehDono = chamador.toLowerCase() === dono.toLowerCase();
+  var ehAnalista = rowsAsObjects_(sheet_(SHEETS.ANALISTAS, HEADERS.Analistas)).some(function (a) {
+    return String(a.Email).toLowerCase() === chamador.toLowerCase() && a.Ativo;
+  });
+  if (!ehDono && !ehAnalista) {
     return ContentService.createTextOutput('Rota restrita ao dono do aplicativo.');
   }
 
