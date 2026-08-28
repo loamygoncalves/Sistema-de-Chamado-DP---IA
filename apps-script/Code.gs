@@ -122,6 +122,23 @@ function handleAdminRoute_(action, e) {
     return ContentService.createTextOutput(dataUri ? ('OK: ' + dataUri.length + ' caracteres de data URI.') : 'ERRO: veja o Registro de execução (Logger) para o detalhe.');
   }
 
+  // Diagnóstico: mostra o que a Fila do analista realmente está vendo —
+  // total de linhas cruas na aba Chamados vs. o que listTickets devolve, e
+  // os valores reais de Status/AnalistaResponsavel das 3 primeiras, para
+  // achar por que um filtro está descartando tudo (ou nada foi lido).
+  if (action === 'diagchamados') {
+    var cru = rowsAsObjects_(sheet_(SHEETS.CHAMADOS, HEADERS.Chamados));
+    var viaLista = listTickets({});
+    var amostra = cru.slice(0, 3).map(function (t) {
+      return t.ID + ': status="' + t.Status + '" analista="' + (t.AnalistaResponsavel || '') + '"';
+    }).join(' | ');
+    return ContentService.createTextOutput(
+      'Linhas cruas na aba Chamados: ' + cru.length +
+      ' | listTickets({}) devolveu: ' + viaLista.length +
+      ' | amostra: ' + amostra
+    );
+  }
+
   return ContentService.createTextOutput('Ação desconhecida.');
 }
 
