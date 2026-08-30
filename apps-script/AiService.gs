@@ -118,6 +118,27 @@ var DESPEDIDA_ = /\b(tchau|ate mais|ate logo|falou|flw|xau|ate a proxima)\b/;
 // sem esta regra um "tudo bem?" era respondido com o FAQ de banco de horas.
 var CORTESIA_ = /^\s*(e ai\s+)?(tudo (bem|bom|certo|tranquilo|joia)|td (bem|bom)|como (vai|voce esta|vc esta|esta|ta)|beleza|blz|tranquilo)\b/;
 
+// A regra acima só reconhece a palavra certa — "tudo bm?" (erro de
+// digitação em "bem") não bate em nada ali, cai na busca de FAQ e ainda
+// corre o risco de casar errado (foi exatamente o que aconteceu: bateu no
+// FAQ de banco de horas, que também tem a palavra "tudo" no meio do
+// texto). Esta segunda checagem tolera erro de digitação, mas só na
+// abertura de cortesia ("tudo"/"td"/"como") + uma palavra pareça com um
+// dos alvos — não é a mesma tolerância usada pra combinar FAQ (essa exige
+// palavra longa; aqui "bem"/"bom" são curtas de propósito).
+var CORTESIA_ABERTURA_ = /^\s*(e ai\s+)?(tudo|td|como|beleza|blz)\b/;
+var CORTESIA_ALVOS_ = ['bem', 'bom', 'certo', 'tranquilo', 'joia', 'beleza', 'blz', 'tranquila', 'vai', 'esta'];
+
+function pareceCortesiaComErro_(question) {
+  var normalizado = normalize_(question);
+  if (!CORTESIA_ABERTURA_.test(normalizado)) return false;
+  var palavras = normalizado.trim().split(/\s+/);
+  if (palavras.length > 5) return false;
+  return palavras.some(function (p) {
+    return CORTESIA_ALVOS_.some(function (alvo) { return p !== alvo && levenshtein_(p, alvo, 1) <= 1; });
+  });
+}
+
 // Pedido pra pular direto pro atendimento humano, sem antes tentar tirar
 // a dúvida com a IA ("quero abrir chamado", "falar com o dp/analista/
 // atendente/humano"). A ideia não é recusar — é sugerir, com jeito,
@@ -154,6 +175,7 @@ function detectIntent_(question, history) {
   }
   if (SAUDACAO_.test(t) && palavras <= 4) return 'saudacao';
   if (CORTESIA_.test(normalize_(question)) && palavras <= 5) return 'cortesia';
+  if (pareceCortesiaComErro_(question)) return 'cortesia';
   if (DESPEDIDA_.test(t) && palavras <= 6) return 'despedida';
   for (var k = 0; k < PEDIDO_ATENDENTE_.length; k++) {
     if (PEDIDO_ATENDENTE_[k].test(t) && palavras <= 8) return 'pedido_atendente';
