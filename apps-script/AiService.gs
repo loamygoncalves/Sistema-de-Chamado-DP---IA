@@ -159,6 +159,13 @@ function pareceRespostaCortesia_(question) {
   }) && palavras.length <= 3;
 }
 
+// Reação curta de surpresa/dúvida à resposta que acabou de ser dada
+// ("sério?", "verdade?", "mesmo?", "só isso?") — não é uma pergunta nova,
+// é o colaborador reagindo ao que já foi dito. Sem isto, "serio ?" caía
+// direto na busca de FAQ e batia (errado) em qualquer FAQ que tivesse a
+// palavra "sério" ou termo parecido — foi o que aconteceu na prática.
+var REACAO_SURPRESA_ = /^\s*(serio|verdade|mesmo|nossa|e so isso|so isso)\s*\??\s*$/;
+
 // Pedido pra pular direto pro atendimento humano, sem antes tentar tirar
 // a dúvida com a IA ("quero abrir chamado", "falar com o dp/analista/
 // atendente/humano"). A ideia não é recusar — é sugerir, com jeito,
@@ -197,6 +204,7 @@ function detectIntent_(question, history) {
   if (CORTESIA_.test(normalize_(question)) && palavras <= 5) return 'cortesia';
   if (pareceCortesiaComErro_(question)) return 'cortesia';
   if (pareceRespostaCortesia_(question)) return 'cortesia';
+  if (REACAO_SURPRESA_.test(normalize_(question).trim())) return 'reacao_surpresa';
   if (DESPEDIDA_.test(t) && palavras <= 6) return 'despedida';
   for (var k = 0; k < PEDIDO_ATENDENTE_.length; k++) {
     if (PEDIDO_ATENDENTE_[k].test(t) && palavras <= 8) return 'pedido_atendente';
@@ -229,6 +237,17 @@ function smallTalkAnswer_(intent, seed) {
   return pickVariant_([
     'Até mais! Qualquer dúvida de DP, é só voltar aqui. 👋',
     'Precisando, estou por aqui. Até logo!'
+  ], seed);
+}
+
+/** Reação a "sério?"/"verdade?"/"só isso?" depois de uma resposta — não é
+ * pergunta nova, é o colaborador reagindo (com surpresa ou desconfiança
+ * de que faltou algo) ao que já foi dito. Reafirma que é isso mesmo e
+ * convida a detalhar mais se quiser, sem forçar uma busca nova na base. */
+function reacaoSurpresaAnswer_(seed) {
+  return pickVariant_([
+    'Sim, é isso mesmo que a nossa base tem sobre esse assunto! Se sentir que faltou algum detalhe ou tiver uma situação específica, me conta que eu vejo com mais calma.',
+    'Isso mesmo! Se quiser mais detalhes sobre o que acabei de te passar, é só perguntar.'
   ], seed);
 }
 
@@ -500,6 +519,12 @@ function askAi(question, history) {
   if (intent === 'gratidao' || intent === 'saudacao' || intent === 'despedida' || intent === 'cortesia') {
     return {
       answer: smallTalkAnswer_(intent, question),
+      decision: 'conversa', confidence: 1, source: null, options: [], steps: []
+    };
+  }
+  if (intent === 'reacao_surpresa') {
+    return {
+      answer: reacaoSurpresaAnswer_(question),
       decision: 'conversa', confidence: 1, source: null, options: [], steps: []
     };
   }
