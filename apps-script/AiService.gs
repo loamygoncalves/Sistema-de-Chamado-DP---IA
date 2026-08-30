@@ -260,26 +260,12 @@ function isReferential_(question) {
     /^\s*e\s/.test(text);
 }
 
-/** Este FAQ já apareceu nesta conversa? Só para decidir o TOM da resposta
- * ("complementando o que falamos" em vez de "sobre X, aqui vai") — não
- * decide sozinho se deve parar de responder, isso é o alreadyAnswered_
- * abaixo. Mesma checagem de fingerprint, sem comparar pergunta nenhuma. */
-function faqJaApareceu_(faq, history) {
-  var body = String(faq.Resposta).trim();
-  if (body.length < 40) return false;
-  var fingerprint = body.substring(0, 60);
-  for (var i = 0; i < history.length; i++) {
-    if (history[i].role === 'assistant' && history[i].content.indexOf(fingerprint) !== -1) return true;
-  }
-  return false;
-}
-
 /**
- * Este FAQ já foi entregue nesta conversa E a pergunta atual não traz
- * NENHUMA palavra de conteúdo nova em relação à pergunta que gerou aquela
- * resposta? Só então é repetição de verdade — a pessoa insistindo no
- * mesmo pedido depois de já ter recebido tudo o que a base tem sobre
- * aquele ponto específico.
+ * Este FAQ já apareceu nesta conversa (procura o começo do texto da
+ * resposta nas mensagens da IA)? Se sim, devolve as palavras de conteúdo
+ * que a pergunta ATUAL traz e a pergunta que gerou aquela resposta não
+ * tinha — é o que separa repetição de verdade de um acompanhamento
+ * legítimo. Devolve null se o FAQ nunca apareceu antes.
  *
  * Um acompanhamento que aprofunda o MESMO assunto com um detalhe novo (ex.:
  * depois de perguntar sobre banco de horas em geral, "e se eu for
@@ -288,9 +274,9 @@ function faqJaApareceu_(faq, history) {
  * "já respondi, base não detalha" quebra a conversa: foi exatamente esse
  * o bug relatado (pergunta nova, mesmo FAQ, IA dizendo que não sabia).
  */
-function alreadyAnswered_(faq, history, currentQuestion, vocabulary) {
+function comparaComPerguntaAnterior_(faq, history, currentQuestion, vocabulary) {
   var body = String(faq.Resposta).trim();
-  if (body.length < 40) return false;
+  if (body.length < 40) return null;
   var fingerprint = body.substring(0, 60);
   var previousQuestion = null;
   for (var i = 0; i < history.length; i++) {
@@ -300,13 +286,61 @@ function alreadyAnswered_(faq, history, currentQuestion, vocabulary) {
       }
     }
   }
-  if (!previousQuestion) return false;
-  if (!currentQuestion || !vocabulary) return true;
+  if (!previousQuestion) return null;
+  if (!currentQuestion || !vocabulary) return { newTokens: [], previousQuestion: previousQuestion };
 
   var currentTokens = analyzeQuery_(currentQuestion, vocabulary).tokens;
   var previousTokens = analyzeQuery_(previousQuestion, vocabulary).tokens;
-  var trouxeAlgoNovo = currentTokens.some(function (tok) { return previousTokens.indexOf(tok) === -1; });
-  return !trouxeAlgoNovo;
+  var newTokens = [];
+  currentTokens.forEach(function (tok) {
+    if (previousTokens.indexOf(tok) === -1 && newTokens.indexOf(tok) === -1) newTokens.push(tok);
+  });
+  return { newTokens: newTokens, previousQuestion: previousQuestion };
+}
+
+/** Este FAQ já foi entregue nesta conversa E a pergunta atual não traz
+ * NENHUMA palavra de conteúdo nova? Só então é repetição de verdade. */
+function alreadyAnswered_(faq, history, currentQuestion, vocabulary) {
+  var info = comparaComPerguntaAnterior_(faq, history, currentQuestion, vocabulary);
+  return !!info && info.newTokens.length === 0;
+}
+
+/** Quebra o texto do FAQ em frases (separadas por ponto final) — cada
+ * frase deste tipo de FAQ costuma cobrir uma regra ou um caso específico
+ * (ex.: uma frase para diaristas, outra para plantonistas), então é a
+ * unidade certa para apontar "qual pedaço responde isso". */
+function splitClauses_(body) {
+  return String(body).split(/\.(?:\s+|$)/)
+    .map(function (c) { return c.trim(); })
+    .filter(function (c) { return c.length > 0; })
+    .map(function (c) { return /[.!?]$/.test(c) ? c : c + '.'; });
+}
+
+/**
+ * Dentro do texto de um FAQ já mostrado antes, acha a frase mais ligada às
+ * palavras NOVAS que a pergunta atual trouxe — usado para apontar direto
+ * pro trecho que responde o detalhe específico, em vez de devolver o
+ * texto inteiro de novo do mesmo jeito (o que rende a queixa "respondeu a
+ * mesma coisa, não entendeu o que eu perguntei").
+ */
+function extractRelevantClause_(body, tokens) {
+  if (!tokens || tokens.length === 0) return null;
+  var clauses = splitClauses_(body);
+  if (clauses.length <= 1) return null;
+
+  var wanted = {};
+  tokens.forEach(function (t) { wanted[t] = true; });
+
+  var best = null, bestScore = 0;
+  clauses.forEach(function (clause) {
+    var clauseTokens = analyzeDocument_(clause);
+    var seen = {}, score = 0;
+    clauseTokens.forEach(function (t) {
+      if (wanted[t] && !seen[t]) { score++; seen[t] = true; }
+    });
+    if (score > bestScore) { bestScore = score; best = clause; }
+  });
+  return bestScore > 0 ? best : null;
 }
 
 /** Monta a resposta com cara de conversa: reconhece o assunto, entrega o
@@ -318,6 +352,22 @@ function composeAnswer_(faq, opts) {
   var body = String(faq.Resposta).trim();
   var seed = opts.seed || faq.Pergunta;
   var parts = [];
+
+  if (opts.highlight) {
+    // Acompanhamento sobre um FAQ já mostrado antes, mas com um detalhe
+    // novo que o próprio texto já cobre: em vez de repetir tudo de novo do
+    // mesmo jeito, aponta direto pro trecho que responde o que há de novo
+    // — só nesse caso o texto completo do FAQ não entra na resposta,
+    // porque já foi mostrado por inteiro antes.
+    parts.push(pickVariant_([
+      'Sim, isso está coberto no que já expliquei sobre ' + dept + ':',
+      'Respondendo direto ao seu caso:',
+      'Olhando com atenção pro que você perguntou:'
+    ], seed));
+    parts.push(opts.highlight);
+    parts.push('Se quiser rever a regra completa de novo, é só pedir.');
+    return parts.join('\n\n');
+  }
 
   if (opts.isCorrection) {
     // Reconhece o engano antes de tentar de novo — sem isso, insistir num
@@ -476,18 +526,17 @@ function askAi(question, history) {
 
   var best = ranked[0];
 
-  // O mesmo FAQ já apareceu nesta conversa: a resposta soa mais natural
-  // como continuação ("complementando") do que como uma introdução nova.
-  if (!isFollowUp && faqJaApareceu_(best.faq, recentHistory)) isFollowUp = true;
+  // O mesmo FAQ já apareceu nesta conversa? Compara com a pergunta que
+  // gerou aquela resposta: se a atual não traz nada de novo, é repetição
+  // de verdade (a base já deu tudo o que tinha, repetir não ajuda); se
+  // traz um detalhe novo que o texto do FAQ já cobre (ex.: "e se eu for
+  // plantonista, ganho hora extra na folga?" depois de já ter perguntado
+  // sobre banco de horas em geral), não é repetição — é um acompanhamento
+  // legítimo, e a resposta aponta direto pro trecho que responde aquilo.
+  var repeticao = comparaComPerguntaAnterior_(best.faq, recentHistory, question, index.vocabulary);
+  if (repeticao) isFollowUp = true;
 
-  // Se este FAQ já foi entregue nesta conversa E a pergunta atual não traz
-  // nada de novo, repeti-lo palavra por palavra não responde nada — foi o
-  // que aconteceu quando o colaborador perguntou "como consigo esse
-  // e-mail?" e recebeu o mesmo texto de novo. A base já deu o que tinha
-  // sobre o assunto: o honesto é dizer isso e oferecer o analista. Mas se
-  // a pergunta trouxer um detalhe novo (ver alreadyAnswered_ acima), isso
-  // não entra aqui — cai no fluxo normal de resposta.
-  if (alreadyAnswered_(best.faq, recentHistory, question, index.vocabulary)) {
+  if (repeticao && repeticao.newTokens.length === 0) {
     return {
       answer: 'Sobre ' + (best.faq.Departamento || 'esse assunto') + ' eu já te passei tudo o que a nossa base tem — ' +
         'ela não detalha esse ponto específico que você está perguntando agora. Para não te dar uma resposta ' +
@@ -496,6 +545,8 @@ function askAi(question, history) {
       source: { department: best.faq.Departamento, question: best.faq.Pergunta }, options: [], steps: []
     };
   }
+
+  var highlight = repeticao ? extractRelevantClause_(String(best.faq.Resposta), repeticao.newTokens) : null;
 
   if (confidence < thresholds.suggest) {
     return {
@@ -528,7 +579,7 @@ function askAi(question, history) {
   // registrada pro dashboard — ver comentário em logAiInteraction_.
   var logId = confident ? logAiInteraction_(question, best.faq.Departamento, confidence) : null;
   return {
-    answer: composeAnswer_(best.faq, { confident: confident, isFollowUp: isFollowUp, isCorrection: isCorrection, seed: question }),
+    answer: composeAnswer_(best.faq, { confident: confident, isFollowUp: isFollowUp, isCorrection: isCorrection, highlight: highlight, seed: question }),
     decision: confident ? 'auto_answer' : 'suggest_ticket',
     confidence: confidence,
     source: { department: best.faq.Departamento, question: best.faq.Pergunta },
