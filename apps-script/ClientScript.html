@@ -1045,8 +1045,20 @@
     root.appendChild(el('div', { class: 'stat-grid' }, [
       statCard_('Total de chamados', stats.total, CHART_COLORS_.tealDark),
       statCard_('Em aberto', stats.abertos, CHART_COLORS_.orange),
-      statCard_('Atrasados', stats.atrasados, stats.atrasados > 0 ? CHART_COLORS_.red : CHART_COLORS_.teal)
+      statCard_('Finalizados', stats.finalizados, CHART_COLORS_.teal)
     ]));
+
+    var statusPares = Object.keys(stats.abertosPorStatus)
+      .map(function (s) { return [STATUS_LABEL[s] || s, stats.abertosPorStatus[s]]; })
+      .sort(function (a, b) { return b[1] - a[1]; });
+    root.appendChild(barListCard_(
+      'Dos chamados em aberto, por status',
+      stats.atrasados > 0
+        ? '🔴 ' + stats.atrasados + ' desses ' + (stats.atrasados === 1 ? 'está' : 'estão') + ' atrasado' + (stats.atrasados === 1 ? '' : 's') + ' (já contado dentro dos números abaixo, não é um status à parte).'
+        : 'Nenhum atrasado no momento.',
+      statusPares,
+      { colorFor: function () { return CHART_COLORS_.orange; } }
+    ));
 
     root.appendChild(donutCard_(
       'IA x Analista',

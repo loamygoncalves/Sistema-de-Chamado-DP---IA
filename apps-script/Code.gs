@@ -756,6 +756,12 @@ function getDashboardStats() {
   var tickets = rowsAsObjects_(sheet_(SHEETS.CHAMADOS, HEADERS.Chamados));
   var abertos = tickets.filter(function (t) { return t.Status !== STATUS.RESOLVIDO && t.Status !== STATUS.ENCERRADO; });
   var overdue = abertos.filter(function (t) { return t.PrazoSLA && new Date(t.PrazoSLA) < new Date(); });
+  // "Atrasados" é um recorte DENTRO de "Em aberto" (um chamado atrasado
+  // também está aberto), não uma quarta categoria — por isso não soma com
+  // Total/Aberto/Finalizados. Quem quiser esse detalhe olha
+  // abertosPorStatus, que sim é mutuamente exclusivo e fecha com abertos.
+  var abertosPorStatus = {};
+  abertos.forEach(function (t) { abertosPorStatus[t.Status] = (abertosPorStatus[t.Status] || 0) + 1; });
   var porDepartamento = {};
   tickets.forEach(function (t) { porDepartamento[t.Departamento] = (porDepartamento[t.Departamento] || 0) + 1; });
 
@@ -793,7 +799,8 @@ function getDashboardStats() {
   var analistaResolvidos = tickets.filter(function (t) { return t.Status === STATUS.RESOLVIDO || t.Status === STATUS.ENCERRADO; }).length;
 
   return {
-    total: tickets.length, abertos: abertos.length, atrasados: overdue.length,
+    total: tickets.length, abertos: abertos.length, finalizados: tickets.length - abertos.length,
+    atrasados: overdue.length, abertosPorStatus: abertosPorStatus,
     porDepartamento: porDepartamento,
     abertosPorCategoria: abertosPorCategoria,
     tempoMedioPorCategoria: tempoMedioPorCategoria,
