@@ -630,12 +630,22 @@ function askAi(question, history) {
   // estiver configurado. Se falhar por qualquer motivo (sem chave, cota
   // do plano gratuito estourada, rede fora), a resposta determinística
   // acima continua valendo — nunca quebra o fluxo.
+  var geminiDebug = {};
   var rewritten = rewriteAnswerWithGemini_(question, best.faq, {
     confident: confident, highlight: highlight, isFollowUp: isFollowUp,
-    previousQuestion: repeticao ? repeticao.previousQuestion : null
+    previousQuestion: repeticao ? repeticao.previousQuestion : null, debug: geminiDebug
   });
+  var finalAnswer = rewritten || deterministicAnswer;
+  // Diagnóstico temporário: com GEMINI_DEBUG=true (Propriedades do
+  // script), o motivo do sucesso/falha aparece direto na resposta do
+  // chat — evita depender do log de Execuções (que atrasa a aparecer).
+  // Tirar essa propriedade (ou deixar 'false') depois de confirmar que
+  // está tudo certo.
+  if (PropertiesService.getScriptProperties().getProperty('GEMINI_DEBUG') === 'true') {
+    finalAnswer += '\n\n[DEBUG Gemini] ' + (geminiDebug.info || '(sem informação)');
+  }
   return {
-    answer: rewritten || deterministicAnswer,
+    answer: finalAnswer,
     decision: confident ? 'auto_answer' : 'suggest_ticket',
     confidence: confidence,
     source: { department: best.faq.Departamento, question: best.faq.Pergunta },

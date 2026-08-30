@@ -59,17 +59,27 @@ var GEMINI_SYSTEM_PROMPT_ =
  * qualquer coisa falhar — quem chama sempre tem a resposta determinística
  * como fallback (ver askAi() em AiService.gs).
  *
- * `opts` (todos opcionais): { confident, highlight, isFollowUp, previousQuestion }.
+ * `opts` (todos opcionais): { confident, highlight, isFollowUp, previousQuestion, debug }.
+ * `opts.debug`, se for um objeto, recebe `opts.debug.info` com o motivo de
+ * sucesso/falha — usado só para diagnóstico (ver GEMINI_DEBUG no
+ * askAi()), não muda em nada o comportamento normal.
  */
 function rewriteAnswerWithGemini_(question, faq, opts) {
   opts = opts || {};
+  var debug = opts.debug || null;
   var config = geminiConfig_();
-  if (!config.enabled) return null;
+  if (!config.enabled) {
+    if (debug) debug.info = 'desligado (sem GEMINI_API_KEY ou GEMINI_REWRITE_ENABLED=false)';
+    return null;
+  }
 
   var cacheKey = geminiCacheKey_(question, faq, opts);
   var cache = CacheService.getScriptCache();
   var cached = cache.get(cacheKey);
-  if (cached) return cached;
+  if (cached) {
+    if (debug) debug.info = 'cache hit (modelo ' + config.model + ')';
+    return cached;
+  }
 
   var userPrompt = 'Departamento: ' + (faq.Departamento || 'Departamento Pessoal') + '\n' +
     'Texto-base (única fonte de verdade — não use nada fora disso):\n"""\n' + faq.Resposta + '\n"""\n';
@@ -105,8 +115,9 @@ function rewriteAnswerWithGemini_(question, faq, opts) {
 
     if (response.getResponseCode() !== 200) {
       // Cota do plano gratuito estourada, chave inválida, modelo errado etc.
-      // Fica só no log — o colaborador recebe a resposta determinística.
-      Logger.log('Gemini rewrite falhou (HTTP ' + response.getResponseCode() + '): ' + response.getContentText().slice(0, 300));
+      var errorBody = response.getContentText().slice(0, 300);
+      Logger.log('Gemini rewrite falhou (HTTP ' + response.getResponseCode() + '): ' + errorBody);
+      if (debug) debug.info = 'HTTP ' + response.getResponseCode() + ' — ' + errorBody;
       return null;
     }
 
@@ -114,14 +125,19 @@ function rewriteAnswerWithGemini_(question, faq, opts) {
     var text = data.candidates && data.candidates[0] && data.candidates[0].content &&
       data.candidates[0].content.parts && data.candidates[0].content.parts[0] &&
       data.candidates[0].content.parts[0].text;
-    if (!text || String(text).trim().length < 10) return null;
+    if (!text || String(text).trim().length < 10) {
+      if (debug) debug.info = 'resposta vazia ou curta demais: ' + JSON.stringify(data).slice(0, 300);
+      return null;
+    }
 
     text = String(text).trim();
     cache.put(cacheKey, text, GEMINI_CACHE_TTL_SECONDS_);
     Logger.log('Gemini rewrite OK (modelo ' + config.model + ', assunto "' + faq.Departamento + '")');
+    if (debug) debug.info = 'sucesso (modelo ' + config.model + ')';
     return text;
   } catch (e) {
     Logger.log('Gemini rewrite deu erro: ' + e);
+    if (debug) debug.info = 'exceção: ' + e;
     return null;
   }
 }
