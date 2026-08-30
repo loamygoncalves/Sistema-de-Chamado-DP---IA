@@ -118,6 +118,23 @@ var DESPEDIDA_ = /\b(tchau|ate mais|ate logo|falou|flw|xau|ate a proxima)\b/;
 // sem esta regra um "tudo bem?" era respondido com o FAQ de banco de horas.
 var CORTESIA_ = /^\s*(e ai\s+)?(tudo (bem|bom|certo|tranquilo|joia)|td (bem|bom)|como (vai|voce esta|vc esta|esta|ta)|beleza|blz|tranquilo)\b/;
 
+// Pedido pra pular direto pro atendimento humano, sem antes tentar tirar
+// a dúvida com a IA ("quero abrir chamado", "falar com o dp/analista/
+// atendente/humano"). A ideia não é recusar — é sugerir, com jeito,
+// contar a dúvida primeiro (a IA pode resolver na hora), deixando sempre
+// a porta aberta pra abrir o chamado mesmo assim se for isso que quer.
+var PEDIDO_ATENDENTE_ = [
+  /\babrir? (um |o )?chamado\b/, /\bfalar com (o |a |um |uma )?(dp|rh|analista|atendente|pessoa|humano)\b/,
+  /\bquero (um |uma )?(analista|atendente|humano)\b/, /\bpreciso de (um |uma )?(analista|atendente|humano)\b/,
+  /\bquero atendimento humano\b/, /\bnao quero falar com (a )?ia\b/, /\btransferir? (pra|para) (um )?(analista|atendente)\b/
+];
+
+// Sentinela: quando o colaborador clica "Quero abrir chamado mesmo assim"
+// depois da sugestão acima, o cliente reenvia este texto — reconhecido
+// ANTES de qualquer outra coisa em askAi(), pra ir direto pro chamado sem
+// cair de novo no mesmo aviso (senão viraria um loop).
+var CONFIRMA_ABRIR_CHAMADO_ = '__quero_abrir_chamado_mesmo_assim__';
+
 function detectIntent_(question, history) {
   var t = ' ' + normalize_(question) + ' ';
   var palavras = normalize_(question).trim().split(/\s+/).length;
@@ -138,6 +155,9 @@ function detectIntent_(question, history) {
   if (SAUDACAO_.test(t) && palavras <= 4) return 'saudacao';
   if (CORTESIA_.test(normalize_(question)) && palavras <= 5) return 'cortesia';
   if (DESPEDIDA_.test(t) && palavras <= 6) return 'despedida';
+  for (var k = 0; k < PEDIDO_ATENDENTE_.length; k++) {
+    if (PEDIDO_ATENDENTE_[k].test(t) && palavras <= 8) return 'pedido_atendente';
+  }
   return 'pergunta';
 }
 
@@ -146,26 +166,37 @@ function detectIntent_(question, history) {
 function smallTalkAnswer_(intent, seed) {
   if (intent === 'gratidao') {
     return pickVariant_([
-      'Que bom que ajudou! 😊 Fico à disposição — se surgir qualquer outra dúvida de DP, é só me chamar.',
+      'Que bom que ajudou, beeper! 😊 Fico à disposição — se surgir qualquer outra dúvida de DP, é só me chamar.',
       'Fico feliz em ter ajudado! Se precisar de mais alguma coisa sobre DP, estou por aqui.',
       'Perfeito, era isso mesmo então! Qualquer outra dúvida, é só perguntar.'
     ], seed);
   }
   if (intent === 'cortesia') {
     return pickVariant_([
-      'Tudo ótimo por aqui, obrigada por perguntar! 😊 Em que posso te ajudar hoje?',
+      'Tudo ótimo por aqui, obrigada por perguntar! 😊 Em que posso te ajudar hoje, beeper?',
       'Tudo bem sim, obrigada! E com você? Me diz o que você precisa que eu procuro pra você.'
     ], seed);
   }
   if (intent === 'saudacao') {
     return pickVariant_([
-      'Oi! Sou a assistente do DP da Beep. Pode perguntar sobre folha de pagamento, férias, benefícios, ponto, documentos — o que você precisar.',
+      'Oi, beeper! Sou a assistente do DP da Beep. Pode perguntar sobre folha de pagamento, férias, benefícios, ponto, documentos — o que você precisar.',
       'Olá! Posso te ajudar com dúvidas de DP: pagamento, férias, benefícios, ponto, atestados e por aí vai. O que você precisa?'
     ], seed);
   }
   return pickVariant_([
     'Até mais! Qualquer dúvida de DP, é só voltar aqui. 👋',
     'Precisando, estou por aqui. Até logo!'
+  ], seed);
+}
+
+/** Resposta gentil quando o colaborador pede pra pular direto pro humano,
+ * sem contar a dúvida — convida a tentar com a IA primeiro (que resolve
+ * na hora, quando resolve), mas nunca fecha a porta: o botão já abre o
+ * chamado de verdade, sem pedir a mesma coisa duas vezes. */
+function ofertaAtendimentoAnswer_(seed) {
+  return pickVariant_([
+    'Claro, beeper! Antes de acionar o time de DP, me conta qual é sua dúvida — boas chances de eu já resolver na hora. Mas se preferir falar direto com o time, é só clicar abaixo que eu já abro o chamado.',
+    'Sem problema! Só que, antes, vale tentar comigo — às vezes eu já respondo na hora e você nem precisa esperar um analista. Me conta o que está acontecendo, ou clique abaixo se preferir ir direto pro chamado.'
   ], seed);
 }
 
@@ -263,6 +294,18 @@ function composeAnswer_(faq, opts) {
  *  - auto_ticket   → a base não cobre o assunto
  */
 function askAi(question, history) {
+  // Reconhecido ANTES de tudo — é a confirmação de quem já viu o aviso de
+  // "conta sua dúvida primeiro" e clicou mesmo assim em ir direto pro
+  // chamado. Reconhecer aqui, fora do fluxo normal, evita cair de novo no
+  // mesmo aviso (senão viraria um loop).
+  if (question === CONFIRMA_ABRIR_CHAMADO_) {
+    return {
+      answer: 'Combinado! Vamos abrir o chamado então — é só preencher os detalhes abaixo.',
+      decision: 'suggest_ticket', confidence: 0, source: null, options: [], steps: [],
+      skipHelpfulCheck: true, autoOpenTicket: true
+    };
+  }
+
   var recentHistory = normalizeHistory_(history);
   var faqs = rowsAsObjects_(sheet_(SHEETS.FAQS, HEADERS.FAQs)).filter(function (f) {
     return f.Pergunta && f.Resposta;
@@ -278,6 +321,13 @@ function askAi(question, history) {
   // Antes de qualquer busca: isto é mesmo uma pergunta? Um "obrigado, era
   // isso!" não deve virar consulta à base de conhecimento.
   var intent = detectIntent_(question, recentHistory);
+  if (intent === 'pedido_atendente') {
+    return {
+      answer: ofertaAtendimentoAnswer_(question),
+      decision: 'conversa', confidence: 1, source: null, steps: [],
+      options: [{ label: 'Quero abrir chamado mesmo assim', question: CONFIRMA_ABRIR_CHAMADO_ }]
+    };
+  }
   if (intent === 'gratidao' || intent === 'saudacao' || intent === 'despedida' || intent === 'cortesia') {
     return {
       answer: smallTalkAnswer_(intent, question),

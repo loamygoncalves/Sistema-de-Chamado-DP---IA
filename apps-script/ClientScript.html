@@ -269,8 +269,20 @@
       // Conversa (agradecimento, saudação, despedida): é só uma fala, não
       // uma consulta à base. Mostrar "72% de confiança" e "isso resolveu
       // sua dúvida?" embaixo de um "que bom que ajudou!" é justamente o
-      // tipo de resposta robótica que se quer evitar.
+      // tipo de resposta robótica que se quer evitar. Ainda assim pode vir
+      // com opções (ex.: "quero abrir chamado mesmo assim" quando o
+      // colaborador pediu pra pular direto pro atendimento humano).
       if (m.decision === 'conversa') {
+        if (m.options && m.options.length && !m.resolvedChoice) {
+          var convChoices = el('div', { style: 'margin-top:8px; display:flex; flex-direction:column; gap:6px;' });
+          m.options.forEach(function (opt) {
+            convChoices.appendChild(el('button', {
+              class: 'btn', style: 'text-align:left; font-size:12.5px; padding:8px 10px;',
+              onclick: function () { m.resolvedChoice = true; drawChatLog(); askQuestion(opt.question, opt.label); }
+            }, [opt.label]));
+          });
+          wrap.appendChild(convChoices);
+        }
         log.appendChild(wrap);
         return;
       }
@@ -320,7 +332,7 @@
       }
 
       if (!m.ticket) {
-        if (m.helpful === undefined) {
+        if (m.helpful === undefined && !m.skipHelpfulCheck) {
           wrap.appendChild(el('div', { style: 'margin-top:8px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;' }, [
             el('span', { style: 'font-size:12.5px; color:var(--ink-soft);' }, ['Isso resolveu sua dúvida?']),
             el('button', { class: 'btn', style: 'padding:5px 10px; font-size:12.5px;', onclick: function () { m.helpful = true; drawChatLog(); if (m.logId) call('markAiInteractionUtil', m.logId, true); } }, ['Sim']),
@@ -402,18 +414,34 @@
     document.body.appendChild(overlay);
   }
 
-  async function askQuestion(query) {
+  async function askQuestion(query, displayText) {
     // Captura a conversa ANTES de empilhar a pergunta atual — é esse
     // histórico que vai junto pro servidor, pra IA responder com o fio da
     // conversa em vez de tratar cada pergunta isolada.
+    // `displayText` existe pros botões de opção cujo `query` de verdade é
+    // um sinalizador interno (ex.: confirmar "abrir chamado mesmo assim")
+    // — o balão do colaborador mostra o texto do botão, não o sinalizador.
     var history = conversationHistory_();
-    state.messages.push({ role: 'user', content: query });
+    state.messages.push({ role: 'user', content: displayText || query });
     state.messages.push({ role: 'pending' });
     drawChatLog();
     try {
       var result = await call('askAi', query, history);
       state.messages.pop();
-      state.messages.push({ role: 'assistant', content: result.answer, confidence: result.confidence, decision: result.decision, source: result.source, options: result.options || [], steps: result.steps || [], query: query, logId: result.logId || null });
+      var m = {
+        role: 'assistant', content: result.answer, confidence: result.confidence, decision: result.decision,
+        source: result.source, options: result.options || [], steps: result.steps || [],
+        // Se abrir chamado a partir daqui, é este campo que vira a base do
+        // assunto/resumo (ver deriveTicketSubject_/draftTicketContext) —
+        // por isso usa o texto legível do botão, não o sinalizador interno.
+        query: displayText || query,
+        logId: result.logId || null, skipHelpfulCheck: !!result.skipHelpfulCheck
+      };
+      state.messages.push(m);
+      // O colaborador já deixou claro que quer abrir chamado (clicou
+      // "mesmo assim") — abre o formulário na hora, sem pedir confirmação
+      // de novo em cima da que ele já deu.
+      if (result.autoOpenTicket) startTicketForm(m);
     } catch (e) {
       state.messages.pop();
       state.messages.push({ role: 'assistant', content: 'Ocorreu um erro ao consultar a IA: ' + errorMessage(e), confidence: 0, decision: 'auto_ticket', source: null, query: query });

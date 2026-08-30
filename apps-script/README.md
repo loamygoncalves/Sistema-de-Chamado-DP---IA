@@ -18,8 +18,13 @@ para manter — só uma cópia da planilha e um deploy de app da Web.
   (plural/sufixo deixam de atrapalhar) e ranqueamento BM25 com IDF. Além
   disso: tem memória de conversa (acompanhamento como "e se eu for
   plantonista?" herda o assunto anterior), **pergunta em vez de chutar**
-  quando dois assuntos empatam, e o colaborador pode clicar em "Encerrar
-  conversa" para mudar de assunto do zero.
+  quando dois assuntos empatam, chama o colaborador de **"beeper"**, e ele
+  pode clicar em "Encerrar conversa" para mudar de assunto do zero.
+- **Pede pra tentar antes de pular pro humano**: se a mensagem for só
+  "quero abrir chamado", "falar com o dp/atendente/analista" — sem contar
+  a dúvida — a IA responde com jeito sugerindo contar o problema primeiro
+  (às vezes ela resolve na hora), sempre com um botão "Quero abrir chamado
+  mesmo assim" que já leva direto pro formulário, sem repetir a pergunta.
 - Abertura de chamado guiada: nome/matrícula pré-preenchidos, escolha da
   fila, resumo do caso montado a partir da conversa para o analista, e
   anexo de arquivo (guardado no Google Drive).
