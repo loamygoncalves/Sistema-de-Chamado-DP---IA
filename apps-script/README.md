@@ -95,33 +95,94 @@ deploy consegue autorizar — o link público evita essa dependência.
 Nem todo colaborador tem conta Google do domínio da empresa — só o time de
 analistas tem, garantidamente. Por isso o deploy aceita **qualquer conta
 Google** (não só do domínio — ver `webapp.access` no `appsscript.json`), e
-quem não tem e-mail cadastrado precisa confirmar a identidade por
-matrícula, contra a aba `Colaboradores`:
+quem não tem e-mail cadastrado precisa confirmar a identidade por **CPF**,
+contra a aba `Colaboradores`:
 
-| Matricula | Nome | Email | Filial | DataAdmissao | Celular |
-|---|---|---|---|---|---|
-| 12345 | Maria Silva | maria.silva@beepsaude.com.br | Hub São Paulo | 2024-03-01 | 11999999999 |
+| Matricula | CPF | Nome | Email | Filial | DataAdmissao | Celular | UserKeyVerificado | DataVerificacao |
+|---|---|---|---|---|---|---|---|---|
+| 12345 | 01234567890 | Maria Silva | maria.silva@beepsaude.com.br | Hub São Paulo | 2024-03-01 | 11999999999 | | |
+
+As duas últimas colunas (`UserKeyVerificado`, `DataVerificacao`) começam
+vazias — o próprio sistema preenche na primeira confirmação de cada
+pessoa (ver **Por que CPF, não matrícula** abaixo). Não edite essas duas
+colunas manualmente, exceto para "destravar" alguém (ver mais abaixo).
+
+**Migrando uma planilha que já estava em uso** (com a coluna `CPF` ainda
+não existindo): rode **BEEP Service Desk > Inicializar planilhas (1x)**
+de novo pelo menu — ele adiciona as colunas que faltam (`CPF`,
+`UserKeyVerificado`, `DataVerificacao`) no final da aba `Colaboradores`
+sem mexer nos dados que já estavam lá. Depois, preencha a coluna `CPF`
+para quem ainda não tem e-mail Google cadastrado batendo — sem isso, essas
+pessoas ficam sem conseguir confirmar identidade.
 
 Como manter essa aba:
-1. Tire da ADP o relatório de **colaboradores ativos** (Matrícula, Nome,
-   E-mail, Filial/"Nome Fantasia", Data de admissão, Celular).
+1. Tire da ADP o relatório de **colaboradores ativos** (Matrícula, CPF,
+   Nome, E-mail, Filial/"Nome Fantasia", Data de admissão, Celular).
 2. Selecione as linhas de dado da aba `Colaboradores` (tudo abaixo do
    cabeçalho) e apague.
-3. Cole o relatório novo por cima, mantendo o cabeçalho da linha 1.
+3. Cole o relatório novo por cima, mantendo o cabeçalho da linha 1 — e
+   preenchendo `UserKeyVerificado`/`DataVerificacao` de quem já tinha
+   confirmado antes, se você tiver esses valores salvos de algum backup
+   (senão, a pessoa simplesmente confirma de novo na próxima visita).
 
 Como o relatório traz **só quem está ativo**, colar por cima (substituição
 completa) já resolve o desligamento sozinho: quem saiu da empresa some da
 aba no próximo import e, na tentativa seguinte de acessar, nem o e-mail
-nem a matrícula salva batem mais — a pessoa é barrada.
+nem o CPF salvo batem mais — a pessoa é barrada.
+
+**CPF com zero à esquerda perdido**: se sua planilha de origem guarda CPF
+como número (comum em export de Excel), um CPF que começa com `0` perde
+esse dígito e fica com 10 números em vez de 11. Não precisa corrigir isso
+na base — o sistema normaliza os dois lados (o que está na planilha e o
+que a pessoa digita) preenchendo zeros à esquerda até completar 11
+dígitos antes de comparar.
 
 Como funciona a identificação, na prática:
 - **E-mail bate com a aba** (comum pra quem tem Gmail/Workspace cadastrado
   na ADP igual ao que usa pra entrar) → reconhecido na hora, sem digitar
   nada.
 - **E-mail não bate** (e-mail cadastrado não é Google, ou a pessoa entrou
-  com outro Gmail) → aparece uma tela pedindo a **matrícula**; confirmada
-  uma vez contra a aba `Colaboradores`, fica lembrada nas próximas visitas
-  (por conta Google, como o nome/matrícula do formulário de chamado).
+  com outro Gmail) → aparece uma tela pedindo o **CPF**; confirmado uma
+  vez contra a aba `Colaboradores`, fica lembrado nas próximas visitas
+  (por conta Google).
+
+### Por que CPF, não matrícula — e o vínculo com a conta Google
+
+Até uma versão anterior, essa confirmação era feita por **matrícula**, e
+tinha uma falha de segurança real: nada impedia uma conta Google
+**qualquer** de digitar a matrícula de **outra pessoa** e "virar" ela no
+sistema — matrícula costuma ser um número sequencial, sem nada de secreto,
+fácil de saber ou adivinhar. Isso foi encontrado em teste real (um
+colaborador digitou de propósito uma matrícula que não era a dele e o
+sistema o deixou entrar como se fosse o dono dela).
+
+A correção tem duas partes:
+1. **CPF em vez de matrícula** como o valor a confirmar — bem menos
+   provável de um colega saber ou adivinhar o CPF de outra pessoa do que
+   a matrícula dela.
+2. **Vínculo com a conta Google que confirmou primeiro**: a primeira
+   conta Google a confirmar um CPF fica "dona" dele — o sistema grava um
+   identificador da conta (`UserKeyVerificado`) na linha da planilha.
+   Qualquer OUTRA conta Google que tentar confirmar o mesmo CPF depois é
+   recusada com a mensagem "esse CPF já foi confirmado em outra conta".
+
+Isso fecha o buraco de "qualquer um vira qualquer um a qualquer momento",
+mas tem uma limitação inerente a qualquer verificação por "algo que a
+pessoa sabe" sem um segundo fator de verdade (SMS, e-mail com link, etc.):
+**quem confirmar PRIMEIRO** fica com o vínculo — se alguém malicioso
+souber o CPF de um colega antes dele mesmo nunca ter acessado o sistema,
+consegue reivindicar a identidade dele primeiro. Pra um piloto interno de
+RH (não é um sistema financeiro nem médico), esse risco residual é
+aceitável; se precisar de mais rigor, a evolução natural é um segundo
+fator (ex.: código enviado por e-mail cadastrado) — fora do escopo deste
+protótipo em Apps Script.
+
+**Destravando alguém indevidamente bloqueado** (ex.: a pessoa legitimamente
+trocou de conta Google, ou alguém confirmou por engano/má-fé antes dela):
+na aba `Colaboradores`, apague o conteúdo das células `UserKeyVerificado`
+e `DataVerificacao` da linha dessa pessoa. Na próxima tentativa, o CPF
+fica livre para ser confirmado de novo (pela primeira conta que tentar —
+por isso, avise a pessoa certa pra tentar assim que você destravar).
 
 ## Atualizando a base depois de uma mudança
 

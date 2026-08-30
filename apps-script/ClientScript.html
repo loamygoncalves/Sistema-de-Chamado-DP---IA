@@ -128,20 +128,20 @@
     renderAfterLogin_();
   }
 
-  /** Usa o `state.user` que já está em mãos (de boot() ou de uma matrícula
-   * recém-confirmada) para decidir a tela — sem buscar de novo no servidor.
-   * Buscar de novo aqui já causou uma tela presa na confirmação de
-   * matrícula mesmo com a matrícula certa (a segunda consulta não tem
-   * nenhuma vantagem sobre o resultado que verifyMatricula acabou de
-   * devolver, e só criava um ponto a mais de poder dar errado). */
+  /** Usa o `state.user` que já está em mãos (de boot() ou de um CPF
+   * recém-confirmado) para decidir a tela — sem buscar de novo no servidor.
+   * Buscar de novo aqui já causou uma tela presa na confirmação de CPF
+   * mesmo com o CPF certo (a segunda consulta não tem nenhuma vantagem
+   * sobre o resultado que verifyCpf acabou de devolver, e só criava um
+   * ponto a mais de poder dar errado). */
   function renderAfterLogin_() {
     document.getElementById('userName').textContent = state.user.name;
     document.getElementById('userEmail').textContent = state.user.email || '(conta sem e-mail detectado)';
     document.getElementById('userRole').textContent = state.user.role === 'analyst' ? 'Analista' : 'Colaborador';
 
     // Colaborador sem e-mail de conta Google cadastrado (nem toda conta é
-    // @beepsaude) precisa confirmar a matrícula antes de usar o sistema —
-    // é essa checagem contra a aba Colaboradores (importada da ADP, só
+    // @beepsaude) precisa confirmar o CPF antes de usar o sistema — é
+    // essa checagem contra a aba Colaboradores (importada da ADP, só
     // gente ativa) que também tira o acesso de quem foi desligado.
     if (state.user.role === 'employee' && !state.user.verified) {
       document.getElementById('tabs').innerHTML = '';
@@ -155,16 +155,16 @@
 
   function renderVerifyGate(root) {
     root.innerHTML = '';
-    var input = el('input', { type: 'text', placeholder: 'Sua matrícula', style: 'max-width:220px;' });
+    var input = el('input', { type: 'text', inputmode: 'numeric', placeholder: 'Seu CPF (só números)', style: 'max-width:220px;' });
     var msg = el('p', { style: 'font-size:12.5px; color:var(--ink-soft); min-height:16px;' }, []);
     var btn = el('button', {
       class: 'btn primary', onclick: async function () {
-        var matricula = input.value.trim();
-        if (!matricula) { msg.textContent = 'Informe sua matrícula.'; return; }
+        var cpf = input.value.trim();
+        if (!cpf) { msg.textContent = 'Informe seu CPF.'; return; }
         btn.setAttribute('disabled', 'disabled');
         msg.textContent = 'Confirmando...';
         try {
-          state.user = await call('verifyMatricula', matricula);
+          state.user = await call('verifyCpf', cpf);
           renderAfterLogin_();
         } catch (e) {
           msg.textContent = errorMessage(e);
@@ -173,9 +173,9 @@
       }
     }, ['Confirmar']);
     root.appendChild(el('div', { class: 'card', style: 'max-width:420px; margin:32px auto;' }, [
-      el('h2', { style: 'margin:0 0 8px; font-size:16px;' }, ['Confirme sua matrícula']),
+      el('h2', { style: 'margin:0 0 8px; font-size:16px;' }, ['Confirme seu CPF']),
       el('p', { style: 'font-size:13px; color:var(--ink-soft); margin:0 0 14px;' },
-        ['Não encontramos sua conta Google na nossa lista de colaboradores ativos. Informe sua matrícula para confirmar quem você é — é só na primeira vez.']),
+        ['Não encontramos sua conta Google na nossa lista de colaboradores ativos. Informe seu CPF para confirmar quem você é — é só na primeira vez, com esta conta Google.']),
       el('div', { style: 'display:flex; gap:8px; align-items:center;' }, [input, btn]),
       msg
     ]));

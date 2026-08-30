@@ -32,9 +32,17 @@ var HEADERS = {
   // Diretório oficial vindo da ADP (só colaboradores ativos — reimportar por
   // cima a cada atualização já revoga quem foi desligado, sem precisar de
   // coluna de status). Usado pra reconhecer o colaborador pelo e-mail da
-  // conta Google, e como validação de matrícula pra quem não tem e-mail
-  // Google cadastrado.
-  Colaboradores: ['Matricula', 'Nome', 'Email', 'Filial', 'DataAdmissao', 'Celular'],
+  // conta Google, e o CPF como confirmação de identidade pra quem não tem
+  // e-mail Google cadastrado (ver verifyCpf() — CPF, não Matrícula, porque
+  // matrícula costuma ser um número sequencial fácil de adivinhar/saber de
+  // outro colaborador; CPF não). UserKeyVerificado/DataVerificacao vinculam
+  // esse CPF à conta Google que o confirmou primeiro — sem isso, qualquer
+  // pessoa logada que soubesse o CPF de outra pessoa conseguia "entrar" como
+  // ela (bug real encontrado em teste, corrigido aqui).
+  Colaboradores: [
+    'Matricula', 'CPF', 'Nome', 'Email', 'Filial', 'DataAdmissao', 'Celular',
+    'UserKeyVerificado', 'DataVerificacao'
+  ],
   Chamados: [
     'ID', 'Protocolo', 'DataAbertura', 'SolicitanteNome', 'SolicitanteEmail', 'Matricula',
     'Departamento', 'Categoria', 'Assunto', 'Descricao', 'Prioridade', 'Status',
@@ -171,6 +179,18 @@ function include(filename) {
    Sessão / identidade
    ============================================================ */
 
+/** CPF só com dígitos, sempre com 11 posições (zero à esquerda incluído).
+ * Necessário porque planilha/Excel costuma guardar CPF como NÚMERO — um
+ * CPF que começa com 0 perde esse 0 e fica com só 10 dígitos na base. Sem
+ * normalizar dos dois lados (o que está na planilha E o que a pessoa
+ * digita) esses CPFs nunca bateriam. */
+function normalizeCpf_(value) {
+  var digits = String(value === undefined || value === null ? '' : value).replace(/\D/g, '');
+  if (!digits) return '';
+  while (digits.length < 11) digits = '0' + digits;
+  return digits;
+}
+
 /** Papel do usuário logado é decidido pela aba "Analistas": se o e-mail da
  * conta Google atual estiver lá (e Ativo=TRUE), ele é analista.
  *
@@ -178,12 +198,14 @@ function include(filename) {
  * (a implantação aceita qualquer conta Google, não só @beepsaude), a
  * identidade dele é conferida contra a aba "Colaboradores" (importada da
  * ADP, só gente ativa): primeiro pelo e-mail da conta logada, e se não
- * bater, pela matrícula que ele já confirmou antes (ver verifyMatricula).
- * Sem bater nenhum dos dois, `verified` vem `false` e o cliente mostra a
- * tela pedindo a matrícula — é essa checagem que também tira o acesso de
- * quem foi desligado: a próxima vez que a aba Colaboradores for atualizada
- * (reimportação substitui tudo), a matrícula/e-mail dessa pessoa somem de
- * lá e nem o e-mail nem a matrícula salva batem mais.
+ * bater, pelo CPF que ele já confirmou antes NESTA MESMA conta Google (ver
+ * verifyCpf() — o vínculo com a conta é o que impede outra pessoa de usar
+ * o mesmo CPF pra "entrar" como alguém que não é ela). Sem bater nenhum
+ * dos dois, `verified` vem `false` e o cliente mostra a tela pedindo o
+ * CPF — é essa checagem que também tira o acesso de quem foi desligado: a
+ * próxima vez que a aba Colaboradores for atualizada (reimportação
+ * substitui tudo), o CPF/e-mail dessa pessoa somem de lá e nem o e-mail
+ * nem o CPF salvo batem mais.
  *
  * NUNCA usar Session.getEffectiveUser() aqui para descobrir QUEM ESTÁ
  * CHAMANDO — como a implantação roda "como" quem publicou (USER_DEPLOYING),
@@ -192,7 +214,7 @@ function include(filename) {
  * caso real) faz QUALQUER pessoa cujo e-mail não seja detectável por
  * getActiveUser() ser identificada como o dono — inclusive como analista,
  * se o dono estiver na aba Analistas. Sem e-mail detectável, o certo é
- * tratar como colaborador não verificado (cai na tela de matrícula). */
+ * tratar como colaborador não verificado (cai na tela de CPF). */
 function getCurrentUser() {
   var email = (Session.getActiveUser().getEmail() || '').trim();
   var analistas = rowsAsObjects_(sheet_(SHEETS.ANALISTAS, HEADERS.Analistas));
@@ -207,14 +229,27 @@ function getCurrentUser() {
   var porEmail = email ? colaboradores.filter(function (c) {
     return String(c.Email).trim().toLowerCase() === email.toLowerCase();
   })[0] : null;
-  var matriculaSalva = getMyProfile_().matricula;
-  var porMatricula = !porEmail && matriculaSalva ? colaboradores.filter(function (c) {
-    return String(c.Matricula).trim() === String(matriculaSalva).trim();
-  })[0] : null;
-  var colaborador = porEmail || porMatricula;
+
+  // Sem bater o e-mail: só reconhece pelo CPF salvo se ele já foi
+  // confirmado ANTES por ESTA MESMA conta Google (userKey). Sem essa
+  // segunda condição, o CPF salvo (por qualquer motivo) seria suficiente
+  // sozinho — que era exatamente o bug: qualquer conta Google digitando o
+  // CPF certo virava a outra pessoa, sem checar se é ela mesma de fato.
+  var porCpfSalvo = null;
+  if (!porEmail) {
+    var cpfSalvo = getVerifiedCpf_();
+    if (cpfSalvo) {
+      var userKeyAtual = Session.getTemporaryActiveUserKey();
+      porCpfSalvo = colaboradores.filter(function (c) {
+        return normalizeCpf_(c.CPF) === cpfSalvo &&
+          String(c.UserKeyVerificado || '').trim() === userKeyAtual;
+      })[0] || null;
+    }
+  }
+  var colaborador = porEmail || porCpfSalvo;
   // Contas Google fora do domínio da empresa muitas vezes não expõem o
   // e-mail pra getActiveUser() (limitação do Google, não tem como forçar) —
-  // por isso, reconhecido o colaborador (mesmo só pela matrícula), usa-se o
+  // por isso, reconhecido o colaborador (mesmo só pelo CPF), usa-se o
   // e-mail cadastrado na ADP como identidade dele daqui pra frente. Sem
   // isso o chamado nascia com SolicitanteEmail vazio: a notificação de
   // e-mail não tinha pra quem mandar, e diferentes colaboradores sem
@@ -226,7 +261,7 @@ function getCurrentUser() {
     name: colaborador ? colaborador.Nome : (getMyProfile_().name || (email ? email.split('@')[0] : 'Colaborador')),
     role: 'employee',
     verified: !!colaborador,
-    matricula: colaborador ? colaborador.Matricula : (matriculaSalva || ''),
+    matricula: colaborador ? colaborador.Matricula : (getMyProfile_().matricula || ''),
     filial: colaborador ? colaborador.Filial : '',
     dataAdmissao: colaborador ? toIso_(colaborador.DataAdmissao) : ''
   };
@@ -236,24 +271,55 @@ function requireAnalyst_(user) {
   if (user.role !== 'analyst') throw new Error('Ação restrita a analistas.');
 }
 
-/** Confere a matrícula digitada contra a aba Colaboradores (importada da
- * ADP). Usada por quem não tem e-mail de conta Google cadastrado — depois
- * de confirmada uma vez, fica salva por conta Google (UserProperties) e
- * getCurrentUser() volta a reconhecer sozinho nas próximas visitas. */
-function verifyMatricula(matricula) {
-  var mat = String(matricula || '').trim();
-  if (!mat) throw new Error('Informe sua matrícula.');
-  var colaborador = rowsAsObjects_(sheet_(SHEETS.COLABORADORES, HEADERS.Colaboradores))
-    .filter(function (c) { return String(c.Matricula).trim() === mat; })[0];
-  if (!colaborador) throw new Error('Matrícula não encontrada. Confira o número ou fale com o time de DP.');
+/**
+ * Confere o CPF digitado contra a aba Colaboradores (importada da ADP).
+ * Usada por quem não tem e-mail de conta Google cadastrado — depois de
+ * confirmado uma vez, fica salvo por conta Google (UserProperties) e
+ * getCurrentUser() volta a reconhecer sozinho nas próximas visitas.
+ *
+ * A trava de segurança está aqui: a PRIMEIRA conta Google a confirmar um
+ * CPF fica "dona" dele (grava o userKey na aba Colaboradores) — qualquer
+ * outra conta que tentar confirmar o MESMO CPF depois é recusada. Sem
+ * isso, CPF (ou matrícula, como era antes) vira só um número que, se
+ * descoberto, deixa qualquer pessoa logada se passar por outra — foi
+ * exatamente esse bug que aconteceu (colaborador testou de propósito com
+ * uma matrícula de outra pessoa e "entrou" como ela).
+ *
+ * Se a mesma pessoa legitimamente trocar de conta Google (não deveria
+ * acontecer, mas pode), quem administra a planilha pode limpar as células
+ * UserKeyVerificado/DataVerificacao da linha dela na aba Colaboradores
+ * pra liberar uma nova confirmação.
+ */
+function verifyCpf(cpf) {
+  var normalizado = normalizeCpf_(cpf);
+  if (!normalizado) throw new Error('Informe seu CPF.');
+
+  var sheet = sheet_(SHEETS.COLABORADORES, HEADERS.Colaboradores);
+  var colaborador = rowsAsObjects_(sheet)
+    .filter(function (c) { return normalizeCpf_(c.CPF) === normalizado; })[0];
+  if (!colaborador) throw new Error('CPF não encontrado. Confira o número ou fale com o time de DP.');
+
+  var userKeyAtual = Session.getTemporaryActiveUserKey();
+  var donoAtual = String(colaborador.UserKeyVerificado || '').trim();
+  if (donoAtual && donoAtual !== userKeyAtual) {
+    throw new Error(
+      'Esse CPF já foi confirmado antes em outra conta Google. Se você mudou de conta ou acha ' +
+      'que isso é um engano, fale com o time de DP para liberar uma nova confirmação.'
+    );
+  }
+  if (!donoAtual) {
+    updateObject_(sheet, colaborador._row, { UserKeyVerificado: userKeyAtual, DataVerificacao: new Date() });
+  }
+
+  saveVerifiedCpf_(normalizado);
   saveMyProfile_(colaborador.Nome, colaborador.Matricula);
   // Monta o resultado a partir do `colaborador` que acabou de ser achado,
   // em vez de chamar getCurrentUser() de novo — evita depender de uma
   // segunda busca bater exatamente igual à que já confirmamos agora.
   return {
     // Mesmo critério de getCurrentUser(): prefere o e-mail cadastrado na
-    // ADP, já que a conta Google de quem confirma por matrícula muitas
-    // vezes não é detectável (ver comentário em getCurrentUser()).
+    // ADP, já que a conta Google de quem confirma por CPF muitas vezes
+    // não é detectável (ver comentário em getCurrentUser()).
     email: colaborador.Email || (Session.getActiveUser().getEmail() || '').trim(),
     name: colaborador.Nome,
     role: 'employee',
@@ -264,12 +330,27 @@ function verifyMatricula(matricula) {
   };
 }
 
-/** Nome/matrícula ficam salvos por conta Google (UserProperties) — depois de
- * confirmados uma vez (por bater com a aba Colaboradores, ou digitados na
- * abertura de chamado), pré-preenchem as próximas visitas. */
+/** Nome/matrícula ficam salvos por conta Google (UserProperties) só como
+ * conveniência de PRÉ-PREENCHIMENTO do formulário de abertura de chamado —
+ * não têm nenhum papel na verificação de identidade (isso é só o CPF
+ * vinculado, ver getVerifiedCpf_/saveVerifiedCpf_ abaixo). Names/matrícula
+ * digitados livremente ao abrir um chamado NÃO viram identidade verificada
+ * pra ninguém. */
 function getMyProfile_() {
   var props = PropertiesService.getUserProperties();
   return { name: props.getProperty('nome') || '', matricula: props.getProperty('matricula') || '' };
+}
+
+/** CPF confirmado por ESTA conta Google — separado do "profile" de
+ * pré-preenchimento acima de propósito: este valor É usado por
+ * getCurrentUser() pra decidir identidade, então só pode ser gravado pelo
+ * fluxo estrito de verifyCpf() (com a trava de vínculo por conta). */
+function getVerifiedCpf_() {
+  return PropertiesService.getUserProperties().getProperty('cpfVerificado') || '';
+}
+
+function saveVerifiedCpf_(cpfNormalizado) {
+  PropertiesService.getUserProperties().setProperty('cpfVerificado', cpfNormalizado);
 }
 
 function saveMyProfile_(name, matricula) {

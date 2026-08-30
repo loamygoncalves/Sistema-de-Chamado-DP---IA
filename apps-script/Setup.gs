@@ -37,6 +37,19 @@ function normalizeKey_(value) {
   return String(value === undefined || value === null ? '' : value).trim().toLowerCase();
 }
 
+/** Adiciona ao FINAL do cabeçalho da aba qualquer coluna de `headers` que
+ * ainda não existir nela — nunca reordena nem toca nas colunas/dados já
+ * existentes. Sem isso, uma aba criada antes de `headers` ganhar uma
+ * coluna nova (ex.: Colaboradores ganhando CPF) ficaria pra sempre sem
+ * ela, porque sheet_() só escreve o cabeçalho na criação da aba. */
+function garantirColunas_(sheet, headers) {
+  var existentes = headers_(sheet);
+  var faltando = headers.filter(function (h) { return existentes.indexOf(h) === -1; });
+  if (faltando.length === 0) return 0;
+  sheet.getRange(1, existentes.length + 1, 1, faltando.length).setValues([faltando]);
+  return faltando.length;
+}
+
 function initializeSpreadsheet() {
   var novos = 0;
 
@@ -84,13 +97,24 @@ function initializeSpreadsheet() {
   sheet_(SHEETS.CHAMADOS, HEADERS.Chamados);
   sheet_(SHEETS.HISTORICO, HEADERS.Historico);
   sheet_(SHEETS.ANEXOS, HEADERS.Anexos);
-  sheet_(SHEETS.COLABORADORES, HEADERS.Colaboradores);
+  var colaboradoresSheet = sheet_(SHEETS.COLABORADORES, HEADERS.Colaboradores);
   sheet_(SHEETS.INTERACOES_IA, HEADERS.InteracoesIA);
+
+  // sheet_() só escreve o cabeçalho quando cria a aba do zero — numa
+  // Colaboradores que já existia (com dados reais já colados da ADP) e
+  // ganhou colunas novas no código (CPF, UserKeyVerificado,
+  // DataVerificacao), isso garante que elas apareçam na aba de verdade
+  // sem mexer nos dados que já estavam lá.
+  var colunasNovas = garantirColunas_(colaboradoresSheet, HEADERS.Colaboradores);
 
   var doneMessage =
     (novos > 0
       ? 'Planilhas atualizadas! ' + novos + ' item(ns) novo(s) adicionado(s) à base.\n\n'
       : 'Planilhas já estavam em dia — nada novo a adicionar.\n\n') +
+    (colunasNovas > 0
+      ? colunasNovas + ' coluna(s) nova(s) adicionada(s) na aba "Colaboradores" (inclui CPF — preencha essa ' +
+        'coluna pra quem ainda não tem, ver README).\n\n'
+      : '') +
     'Antes de divulgar o link do sistema:\n' +
     '1) Edite a aba "Analistas" com os e-mails reais do time de DP.\n' +
     '2) Cole o relatório de colaboradores ativos da ADP na aba "Colaboradores" (ver README).\n' +
