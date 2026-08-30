@@ -176,9 +176,18 @@ function include(filename) {
  * tela pedindo a matrícula — é essa checagem que também tira o acesso de
  * quem foi desligado: a próxima vez que a aba Colaboradores for atualizada
  * (reimportação substitui tudo), a matrícula/e-mail dessa pessoa somem de
- * lá e nem o e-mail nem a matrícula salva batem mais. */
+ * lá e nem o e-mail nem a matrícula salva batem mais.
+ *
+ * NUNCA usar Session.getEffectiveUser() aqui para descobrir QUEM ESTÁ
+ * CHAMANDO — como a implantação roda "como" quem publicou (USER_DEPLOYING),
+ * getEffectiveUser() sempre devolve o e-mail do dono do deploy, não de quem
+ * abriu o link. Um fallback assim (existiu aqui e foi removido depois de um
+ * caso real) faz QUALQUER pessoa cujo e-mail não seja detectável por
+ * getActiveUser() ser identificada como o dono — inclusive como analista,
+ * se o dono estiver na aba Analistas. Sem e-mail detectável, o certo é
+ * tratar como colaborador não verificado (cai na tela de matrícula). */
 function getCurrentUser() {
-  var email = (Session.getActiveUser().getEmail() || Session.getEffectiveUser().getEmail() || '').trim();
+  var email = (Session.getActiveUser().getEmail() || '').trim();
   var analistas = rowsAsObjects_(sheet_(SHEETS.ANALISTAS, HEADERS.Analistas));
   var analyst = analistas.filter(function (a) {
     return String(a.Email).trim().toLowerCase() === email.toLowerCase() && a.Ativo;
