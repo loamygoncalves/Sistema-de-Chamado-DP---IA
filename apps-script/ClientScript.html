@@ -1051,13 +1051,19 @@
     var statusPares = Object.keys(stats.abertosPorStatus)
       .map(function (s) { return [STATUS_LABEL[s] || s, stats.abertosPorStatus[s]]; })
       .sort(function (a, b) { return b[1] - a[1]; });
+    var atrasadosBanner = stats.atrasados > 0
+      ? el('div', {
+        style: 'display:flex; align-items:center; gap:10px; background:var(--critical-tint); color:var(--critical-ink); ' +
+          'border-radius:8px; padding:10px 14px; margin:4px 0 12px; font-size:14px; font-weight:800;'
+      }, ['🔴 ' + stats.atrasados + ' chamado' + (stats.atrasados === 1 ? '' : 's') + ' em aberto ' + (stats.atrasados === 1 ? 'está' : 'estão') + ' atrasado' + (stats.atrasados === 1 ? '' : 's') + '!'])
+      : null;
     root.appendChild(barListCard_(
       'Dos chamados em aberto, por status',
       stats.atrasados > 0
-        ? '🔴 ' + stats.atrasados + ' desses ' + (stats.atrasados === 1 ? 'está' : 'estão') + ' atrasado' + (stats.atrasados === 1 ? '' : 's') + ' (já contado dentro dos números abaixo, não é um status à parte).'
+        ? 'Já contado dentro dos números abaixo — não é um status à parte.'
         : 'Nenhum atrasado no momento.',
       statusPares,
-      { colorFor: function () { return CHART_COLORS_.orange; } }
+      { colorFor: function () { return CHART_COLORS_.orange; }, banner: atrasadosBanner }
     ));
 
     root.appendChild(donutCard_(
@@ -1145,6 +1151,7 @@
   function barListCard_(title, subtitle, pares, opts) {
     opts = opts || {};
     var card = el('div', { class: 'card' }, [el('h3', { style: 'margin:0 0 4px; font-size:14px;' }, [title])]);
+    if (opts.banner) card.appendChild(opts.banner);
     if (subtitle) card.appendChild(el('p', { style: 'margin:0 0 12px; font-size:11px; color:var(--ink-soft);' }, [subtitle]));
     if (pares.length === 0) {
       card.appendChild(el('p', { style: 'margin:0; font-size:11.5px; color:var(--ink-soft);' }, ['Nada por aqui ainda.']));
