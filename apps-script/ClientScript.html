@@ -125,6 +125,16 @@
       document.getElementById('view').appendChild(el('div', { class: 'card' }, ['Erro ao carregar o BEEP Service Desk: ' + errorMessage(e)]));
       return;
     }
+    renderAfterLogin_();
+  }
+
+  /** Usa o `state.user` que já está em mãos (de boot() ou de uma matrícula
+   * recém-confirmada) para decidir a tela — sem buscar de novo no servidor.
+   * Buscar de novo aqui já causou uma tela presa na confirmação de
+   * matrícula mesmo com a matrícula certa (a segunda consulta não tem
+   * nenhuma vantagem sobre o resultado que verifyMatricula acabou de
+   * devolver, e só criava um ponto a mais de poder dar errado). */
+  function renderAfterLogin_() {
     document.getElementById('userName').textContent = state.user.name;
     document.getElementById('userEmail').textContent = state.user.email || '(conta sem e-mail detectado)';
     document.getElementById('userRole').textContent = state.user.role === 'analyst' ? 'Analista' : 'Colaborador';
@@ -155,7 +165,7 @@
         msg.textContent = 'Confirmando...';
         try {
           state.user = await call('verifyMatricula', matricula);
-          await boot();
+          renderAfterLogin_();
         } catch (e) {
           msg.textContent = errorMessage(e);
           btn.removeAttribute('disabled');

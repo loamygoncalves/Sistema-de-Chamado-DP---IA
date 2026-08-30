@@ -232,7 +232,18 @@ function verifyMatricula(matricula) {
     .filter(function (c) { return String(c.Matricula).trim() === mat; })[0];
   if (!colaborador) throw new Error('Matrícula não encontrada. Confira o número ou fale com o time de DP.');
   saveMyProfile_(colaborador.Nome, colaborador.Matricula);
-  return getCurrentUser();
+  // Monta o resultado a partir do `colaborador` que acabou de ser achado,
+  // em vez de chamar getCurrentUser() de novo — evita depender de uma
+  // segunda busca bater exatamente igual à que já confirmamos agora.
+  return {
+    email: (Session.getActiveUser().getEmail() || '').trim(),
+    name: colaborador.Nome,
+    role: 'employee',
+    verified: true,
+    matricula: colaborador.Matricula,
+    filial: colaborador.Filial,
+    dataAdmissao: toIso_(colaborador.DataAdmissao)
+  };
 }
 
 /** Nome/matrícula ficam salvos por conta Google (UserProperties) — depois de
