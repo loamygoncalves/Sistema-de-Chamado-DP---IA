@@ -85,6 +85,7 @@ function initializeSpreadsheet() {
   sheet_(SHEETS.HISTORICO, HEADERS.Historico);
   sheet_(SHEETS.ANEXOS, HEADERS.Anexos);
   sheet_(SHEETS.COLABORADORES, HEADERS.Colaboradores);
+  sheet_(SHEETS.INTERACOES_IA, HEADERS.InteracoesIA);
 
   var doneMessage =
     (novos > 0

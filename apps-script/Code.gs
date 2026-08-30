@@ -22,7 +22,8 @@ var SHEETS = {
   RESPOSTAS_PADRAO: 'RespostasPadrao',
   FAQS: 'FAQs',
   PASSOS: 'Passos',
-  ANEXOS: 'Anexos'
+  ANEXOS: 'Anexos',
+  INTERACOES_IA: 'InteracoesIA'
 };
 
 var HEADERS = {
@@ -46,7 +47,13 @@ var HEADERS = {
   // pelo texto da Pergunta. Cada etapa tem o SEU texto e a SUA imagem —
   // uma lista solta de imagens no fim da resposta perderia esse par.
   Passos: ['Pergunta', 'Ordem', 'Titulo', 'Texto', 'Imagem'],
-  Anexos: ['ID', 'ChamadoID', 'NomeArquivo', 'URL', 'EnviadoPor', 'DataHora']
+  Anexos: ['ID', 'ChamadoID', 'NomeArquivo', 'URL', 'EnviadoPor', 'DataHora'],
+  // Uma linha por resposta automática da IA (decisão "auto_answer") — pra
+  // o dashboard poder mostrar quantas dúvidas a IA resolveu sozinha, sem
+  // virar chamado. Não depende do colaborador confirmar nada: a linha
+  // nasce na hora da resposta; Util só é preenchida se ele clicar
+  // "Sim"/"Não" depois (dado extra de satisfação, não é o que conta).
+  InteracoesIA: ['ID', 'Data', 'Pergunta', 'Departamento', 'Confianca', 'Util']
 };
 
 var SLA_HORAS_POR_PRIORIDADE = { baixa: 72, media: 48, alta: 24, critica: 4 };
@@ -751,5 +758,46 @@ function getDashboardStats() {
   var overdue = abertos.filter(function (t) { return t.PrazoSLA && new Date(t.PrazoSLA) < new Date(); });
   var porDepartamento = {};
   tickets.forEach(function (t) { porDepartamento[t.Departamento] = (porDepartamento[t.Departamento] || 0) + 1; });
-  return { total: tickets.length, abertos: abertos.length, atrasados: overdue.length, porDepartamento: porDepartamento };
+
+  var abertosPorCategoria = {};
+  abertos.forEach(function (t) { abertosPorCategoria[t.Departamento] = (abertosPorCategoria[t.Departamento] || 0) + 1; });
+
+  // Tempo (corrido, não em horas úteis) da abertura até a PRIMEIRA resposta
+  // pública do analista, por fila — é isso que aponta categoria lenta x
+  // rápida pra responder. Chamado sem resposta ainda não entra na média.
+  var historico = rowsAsObjects_(sheet_(SHEETS.HISTORICO, HEADERS.Historico));
+  var primeiraRespostaPorChamado = {};
+  historico
+    .filter(function (h) { return h.Papel === 'analista' && !h.Interno; })
+    .forEach(function (h) {
+      var atual = primeiraRespostaPorChamado[h.ChamadoID];
+      if (!atual || new Date(h.DataHora) < new Date(atual)) primeiraRespostaPorChamado[h.ChamadoID] = h.DataHora;
+    });
+  var somaHoras = {}, contagem = {};
+  tickets.forEach(function (t) {
+    var primeira = primeiraRespostaPorChamado[t.ID];
+    if (!primeira) return;
+    var horas = (new Date(primeira) - new Date(t.DataAbertura)) / 3600000;
+    if (horas < 0) return;
+    somaHoras[t.Departamento] = (somaHoras[t.Departamento] || 0) + horas;
+    contagem[t.Departamento] = (contagem[t.Departamento] || 0) + 1;
+  });
+  var tempoMedioPorCategoria = {};
+  Object.keys(contagem).forEach(function (dep) { tempoMedioPorCategoria[dep] = somaHoras[dep] / contagem[dep]; });
+
+  // "Resolvido pela IA" = toda resposta automática dada (InteracoesIA),
+  // sem depender de confirmação do colaborador — ver logAiInteraction_ em
+  // AiService.gs. "Resolvido por analista" = chamados que chegaram a
+  // resolvido/encerrado.
+  var iaResolvidos = Math.max(0, sheet_(SHEETS.INTERACOES_IA, HEADERS.InteracoesIA).getLastRow() - 1);
+  var analistaResolvidos = tickets.filter(function (t) { return t.Status === STATUS.RESOLVIDO || t.Status === STATUS.ENCERRADO; }).length;
+
+  return {
+    total: tickets.length, abertos: abertos.length, atrasados: overdue.length,
+    porDepartamento: porDepartamento,
+    abertosPorCategoria: abertosPorCategoria,
+    tempoMedioPorCategoria: tempoMedioPorCategoria,
+    iaResolvidos: iaResolvidos,
+    analistaResolvidos: analistaResolvidos
+  };
 }

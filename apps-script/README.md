@@ -36,8 +36,15 @@ para manter — só uma cópia da planilha e um deploy de app da Web.
   editável antes de enviar.
 - Respostas padrão (genéricas ou por fila), com atalho de inserção com um
   clique direto no rodapé da resposta.
-- Notificações por e-mail (aberto / respondido / finalizado) e um
-  dashboard bem simples.
+- Notificações por e-mail (aberto / respondido / finalizado), com layout
+  próprio da marca Beep e remetente configurável (ver seção de instalação).
+- **Dashboard com métricas de verdade**: total/em aberto/atrasados,
+  chamados em aberto por categoria, tempo médio até a 1ª resposta do
+  analista por categoria (aponta fila lenta x rápida), e **IA x Analista**
+  — quantas dúvidas a IA resolveu sozinha (toda resposta automática dada,
+  sem depender do colaborador confirmar — poucos clicam) contra quantas
+  precisaram virar chamado até um analista resolver. Isso vem de uma nova
+  aba, `InteracoesIA`, alimentada sozinha a cada resposta automática.
 
 ## Passo a passo com imagens (aba `Passos`)
 

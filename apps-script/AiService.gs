@@ -389,13 +389,40 @@ function askAi(question, history) {
   // Se este FAQ tiver passo a passo ilustrado, ele vai junto: são as
   // etapas que realmente tiram a dúvida de um procedimento de tela.
   var steps = getStepsFor(best.faq.Pergunta);
+  // Toda resposta automática (decisão de verdade, sem ressalva) fica
+  // registrada pro dashboard — ver comentário em logAiInteraction_.
+  var logId = confident ? logAiInteraction_(question, best.faq.Departamento, confidence) : null;
   return {
     answer: composeAnswer_(best.faq, { confident: confident, isFollowUp: isFollowUp, isCorrection: isCorrection, seed: question }),
     decision: confident ? 'auto_answer' : 'suggest_ticket',
     confidence: confidence,
     source: { department: best.faq.Departamento, question: best.faq.Pergunta },
-    options: [], steps: steps
+    options: [], steps: steps, logId: logId
   };
+}
+
+/** Registra uma resposta automática da IA (decisão "auto_answer"), pra dar
+ * pro dashboard "quantas dúvidas a IA resolveu sozinha x quantas viraram
+ * chamado pra analista" (ver getDashboardStats() em Code.gs). Não depende
+ * do colaborador confirmar nada — poucos clicam em "isso resolveu?" mesmo
+ * quando resolveu de verdade; a linha nasce na hora da resposta, e o
+ * clique (ver markAiInteractionUtil) só marca a coluna Util depois, como
+ * satisfação extra, não como condição pra contar. */
+function logAiInteraction_(question, department, confidence) {
+  var id = Utilities.getUuid();
+  appendObject_(sheet_(SHEETS.INTERACOES_IA, HEADERS.InteracoesIA), {
+    ID: id, Data: new Date(), Pergunta: String(question || '').slice(0, 500),
+    Departamento: department || '', Confianca: Math.round(confidence * 100) / 100, Util: ''
+  });
+  return id;
+}
+
+function markAiInteractionUtil(logId, useful) {
+  if (!logId) return;
+  var sheet = sheet_(SHEETS.INTERACOES_IA, HEADERS.InteracoesIA);
+  var row = findRowById_(sheet, 'ID', logId);
+  if (!row) return;
+  updateObject_(sheet, row._row, { Util: !!useful });
 }
 
 /**
