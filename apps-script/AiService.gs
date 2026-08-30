@@ -343,6 +343,42 @@ function extractRelevantClause_(body, tokens) {
   return bestScore > 0 ? best : null;
 }
 
+/**
+ * Escolhe 1-2 palavras da pergunta atual que valem a pena "ecoar" na
+ * introdução da resposta (ex.: "plantonista", "folga") — sinal de que a
+ * IA prestou atenção nos detalhes específicos, não só bateu no assunto
+ * geral. Só entram palavras que: (a) o colaborador de fato escreveu (usa
+ * a forma corrigida, não a stemizada, pra soar natural), (b) existem de
+ * fato na base (senão seria eco de ruído), (c) não são só o nome do
+ * próprio departamento (ecoar "banco"/"horas" depois de já dizer "Sobre
+ * Banco de horas" é redundante) e (d) são raras o bastante pra dizer algo
+ * (um IDF mínimo) — sem esse corte, uma pergunta do tipo "como funciona
+ * X?" sobra só com a palavra "funciona" depois de descartar X (o nome do
+ * departamento), e ecoar um verbo genérico desses ("entendi que é sobre
+ * funciona") soa pior do que não dizer nada. Isto NUNCA tira nada da
+ * resposta — é só decoração da introdução; o corpo do FAQ continua
+ * inteiro do mesmo jeito.
+ */
+function pickReconhecidos_(analyzed, index, faq, max) {
+  var topicSet = {};
+  if (faq && faq.Departamento) {
+    analyzeDocument_(faq.Departamento).forEach(function (t) { topicSet[t] = true; });
+  }
+  var seenStems = {}, candidates = [];
+  analyzed.corrected.forEach(function (word) {
+    var stem = lightStem_(word);
+    if (seenStems[stem] || topicSet[stem]) return;
+    seenStems[stem] = true;
+    var df = index.df[stem] || 0;
+    if (df === 0) return;
+    var idf = idf_(index, stem);
+    if (idf < 1) return; // comum demais na base pra dizer algo específico
+    candidates.push({ word: word, idf: idf });
+  });
+  candidates.sort(function (a, b) { return b.idf - a.idf; });
+  return candidates.slice(0, max || 2).map(function (c) { return c.word; });
+}
+
 /** Monta a resposta com cara de conversa: reconhece o assunto, entrega o
  * conteúdo da base e abre o próximo passo. O conteúdo em si é sempre o
  * texto do FAQ — nada é inventado. */
@@ -384,18 +420,22 @@ function composeAnswer_(faq, opts) {
       'Seguindo no mesmo assunto (' + dept + '):'
     ], seed));
   } else if (opts.confident) {
+    var extra = (opts.recognizedTerms && opts.recognizedTerms.length)
+      ? ' (entendi que é sobre ' + opts.recognizedTerms.join(' e ') + ')' : '';
     parts.push(pickVariant_([
-      'Sobre ' + dept + ' — aqui vai:',
-      'Essa é sobre ' + dept + '. Olha só:',
-      'Isso é tema de ' + dept + ':'
+      'Sobre ' + dept + extra + ' — aqui vai:',
+      'Essa é sobre ' + dept + extra + '. Olha só:',
+      'Isso é tema de ' + dept + extra + ':'
     ], seed));
   } else {
     // Confiança média: assume menos, deixa claro o que entendeu, para o
     // colaborador conseguir corrigir o rumo em vez de aceitar algo errado.
+    var extraMedia = (opts.recognizedTerms && opts.recognizedTerms.length)
+      ? ' (entendi que é sobre ' + opts.recognizedTerms.join(' e ') + ')' : '';
     parts.push(pickVariant_([
-      'Pelo que entendi, sua dúvida é sobre ' + dept + '. Se for isso:',
-      'Acho que você está perguntando sobre ' + dept + ':',
-      'Entendi como um assunto de ' + dept + '. Veja se ajuda:'
+      'Pelo que entendi, sua dúvida é sobre ' + dept + extraMedia + '. Se for isso:',
+      'Acho que você está perguntando sobre ' + dept + extraMedia + ':',
+      'Entendi como um assunto de ' + dept + extraMedia + '. Veja se ajuda:'
     ], seed));
   }
 
@@ -578,8 +618,15 @@ function askAi(question, history) {
   // Toda resposta automática (decisão de verdade, sem ressalva) fica
   // registrada pro dashboard — ver comentário em logAiInteraction_.
   var logId = confident ? logAiInteraction_(question, best.faq.Departamento, confidence) : null;
+  // Palavras específicas da pergunta atual que valem a pena ecoar na
+  // introdução (ver pickReconhecidos_) — só decoração, nunca tira nada do
+  // corpo da resposta.
+  var recognizedTerms = highlight ? [] : pickReconhecidos_(analyzed, index, best.faq, 2);
   return {
-    answer: composeAnswer_(best.faq, { confident: confident, isFollowUp: isFollowUp, isCorrection: isCorrection, highlight: highlight, seed: question }),
+    answer: composeAnswer_(best.faq, {
+      confident: confident, isFollowUp: isFollowUp, isCorrection: isCorrection,
+      highlight: highlight, recognizedTerms: recognizedTerms, seed: question
+    }),
     decision: confident ? 'auto_answer' : 'suggest_ticket',
     confidence: confidence,
     source: { department: best.faq.Departamento, question: best.faq.Pergunta },
