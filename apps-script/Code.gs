@@ -265,12 +265,6 @@ function getMyProfile_() {
   return { name: props.getProperty('nome') || '', matricula: props.getProperty('matricula') || '' };
 }
 
-function getMyProfile() {
-  var profile = getMyProfile_();
-  var user = getCurrentUser();
-  return { name: profile.name || user.name, matricula: profile.matricula, email: user.email };
-}
-
 function saveMyProfile_(name, matricula) {
   var props = PropertiesService.getUserProperties();
   props.setProperty('nome', name);
@@ -339,7 +333,21 @@ function toIso_(value) {
   return String(value);
 }
 
-function serializeTicket_(t) {
+/** Email → Nome de cada analista ativo — pra mostrar o nome do responsável
+ * em vez do e-mail (AnalistaResponsavel só guarda o e-mail, que é a chave
+ * usada pra atribuir/transferir). Montado uma vez e passado adiante em
+ * listTickets(), pra não reler a aba Analistas a cada linha. */
+function analistasPorEmail_() {
+  var mapa = {};
+  rowsAsObjects_(sheet_(SHEETS.ANALISTAS, HEADERS.Analistas)).forEach(function (a) {
+    mapa[String(a.Email).trim().toLowerCase()] = a.Nome;
+  });
+  return mapa;
+}
+
+function serializeTicket_(t, analistasByEmail) {
+  var mapa = analistasByEmail || analistasPorEmail_();
+  var email = t.AnalistaResponsavel || '';
   return {
     id: t.ID,
     protocol: t.Protocolo,
@@ -353,7 +361,8 @@ function serializeTicket_(t) {
     description: t.Descricao,
     priority: t.Prioridade,
     status: t.Status,
-    assignedTo: t.AnalistaResponsavel || null,
+    assignedTo: email || null,
+    assignedToName: email ? (mapa[email.trim().toLowerCase()] || email) : null,
     slaDueAt: toIso_(t.PrazoSLA),
     closedAt: toIso_(t.DataFechamento),
     closureReason: t.MotivoFechamento || null,
@@ -450,7 +459,11 @@ function listTickets(filters) {
   if (user.role !== 'analyst') {
     tickets = tickets.filter(function (t) { return t.SolicitanteEmail === user.email; });
   } else {
-    if (filters.unassigned) tickets = tickets.filter(function (t) { return !t.AnalistaResponsavel; });
+    // Caixa de entrada = só quem está esperando ser vinculado — um chamado
+    // já encerrado sem ter sido assumido (finalizado direto da fila geral)
+    // não é mais "pendente", então some daqui e só aparece na aba
+    // Encerrados.
+    if (filters.unassigned) tickets = tickets.filter(function (t) { return !t.AnalistaResponsavel && t.Status !== STATUS.ENCERRADO; });
     if (filters.mine) tickets = tickets.filter(function (t) { return t.AnalistaResponsavel === user.email; });
   }
   if (filters.status) tickets = tickets.filter(function (t) { return t.Status === filters.status; });
@@ -472,7 +485,8 @@ function listTickets(filters) {
     });
   }
   tickets.sort(function (a, b) { return new Date(b.DataAbertura) - new Date(a.DataAbertura); });
-  return tickets.map(serializeTicket_);
+  var analistas = analistasPorEmail_();
+  return tickets.map(function (t) { return serializeTicket_(t, analistas); });
 }
 
 function addComment(ticketId, body, isInternal, newStatus) {

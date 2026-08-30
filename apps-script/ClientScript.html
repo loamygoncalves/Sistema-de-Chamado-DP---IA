@@ -77,8 +77,8 @@
       ]),
       el('div', { class: 'subject' }, [t.subject]),
       el('div', { class: 'meta' }, [
-        t.department + ' · ' + t.requesterName + ' · ',
-        t.assignedTo ? el('b', {}, ['Analista: ' + t.assignedTo]) : el('span', { style: 'font-style:italic;' }, ['sem analista vinculado'])
+        t.department + ' · Colaborador: ', el('b', {}, [t.requesterName]), ' · ',
+        t.assignedTo ? el('b', {}, ['Analista: ' + (t.assignedToName || t.assignedTo)]) : el('span', { style: 'font-style:italic;' }, ['sem analista vinculado'])
       ])
     ]);
   }
@@ -423,10 +423,13 @@
 
   /* ---------------- Abertura de chamado a partir do chat ---------------- */
 
-  async function startTicketForm(m) {
-    var profile = await call('getMyProfile');
+  function startTicketForm(m) {
+    // Nome/matrícula vêm de quem está logado (state.user, já validado
+    // contra a aba Colaboradores) — não é mais um campo editável, pra não
+    // repetir o problema de abrir chamado com um nome de teste antigo
+    // (salvo de uma sessão anterior) em vez de quem realmente está usando.
     state.ticketForm = {
-      forMessage: m, step: 'form', name: profile.name, matricula: profile.matricula,
+      forMessage: m, step: 'form', name: state.user.name, matricula: state.user.matricula,
       department: m.source ? m.source.department : (state.departments[0] ? state.departments[0].name : ''),
       category: '', description: '', subject: '', file: null, loading: false
     };
@@ -446,24 +449,27 @@
 
     if (tf.step === 'form') {
       var fileInput = el('input', { type: 'file' });
+      var categoryInput = el('input', {
+        type: 'text', value: tf.category, placeholder: 'Do que se trata o seu chamado?',
+        oninput: function (ev) { tf.category = ev.target.value; categoryError.textContent = ''; }
+      });
+      var categoryError = el('span', { style: 'font-size:11px; color:var(--critical-ink);' }, []);
       box.appendChild(el('p', { style: 'margin:0 0 8px; font-weight:700; font-size:13px;' }, ['Abrir chamado para o DP']));
-      box.appendChild(el('label', { class: 'field' }, [el('span', {}, ['Nome completo']),
-        el('input', { type: 'text', value: tf.name, oninput: function (ev) { tf.name = ev.target.value; } })]));
-      box.appendChild(el('label', { class: 'field' }, [el('span', {}, ['Matrícula']),
-        el('input', { type: 'text', value: tf.matricula, oninput: function (ev) { tf.matricula = ev.target.value; } })]));
-      box.appendChild(el('label', { class: 'field' }, [el('span', {}, ['Nicho do assunto (fila)']),
+      box.appendChild(el('p', { style: 'margin:0 0 10px; font-size:12px; color:var(--ink-soft);' },
+        ['Aberto por ', el('b', { style: 'color:var(--ink);' }, [tf.name]), ' · matrícula ' + tf.matricula]));
+      box.appendChild(el('label', { class: 'field' }, [el('span', {}, ['Categoria']),
         el('select', { onchange: function (ev) { tf.department = ev.target.value; } },
           state.departments.map(function (d) {
             var opt = el('option', { value: d.name }, [d.name]);
             if (d.name === tf.department) opt.setAttribute('selected', 'selected');
             return opt;
           }))]));
-      box.appendChild(el('label', { class: 'field' }, [el('span', {}, ['Categoria (opcional)']),
-        el('input', { type: 'text', placeholder: 'Ex.: Vale-refeição, ajuste de ponto...', oninput: function (ev) { tf.category = ev.target.value; } })]));
+      box.appendChild(el('label', { class: 'field' }, [el('span', {}, ['Assunto *']), categoryInput, categoryError]));
       box.appendChild(el('label', { class: 'field' }, [el('span', {}, ['Anexar arquivo (opcional)']), fileInput]));
       box.appendChild(el('div', { style: 'display:flex; justify-content:flex-end; gap:8px;' }, [
         el('button', { class: 'btn', onclick: function () { state.ticketForm = null; drawChatLog(); } }, ['Cancelar']),
         el('button', { class: 'btn primary', onclick: async function () {
+          if (!tf.category.trim()) { categoryError.textContent = 'Preencha o assunto.'; return; }
           tf.file = fileInput.files[0] || null;
           tf.loading = true; drawChatLog();
           try {
@@ -539,8 +545,8 @@
 
     var tabButtons = {};
     var tabsRow = el('div', { class: 'toolbar' });
-    ['inbox', 'mine', 'all'].forEach(function (mode) {
-      var label = mode === 'inbox' ? 'Caixa de entrada' : mode === 'mine' ? 'Meus atendimentos' : 'Todos os chamados';
+    ['inbox', 'mine', 'all', 'closed'].forEach(function (mode) {
+      var label = mode === 'inbox' ? 'Caixa de entrada' : mode === 'mine' ? 'Meus atendimentos' : mode === 'closed' ? 'Encerrados' : 'Todos os chamados';
       var btn = el('button', { class: 'chip', onclick: function () { av.mode = mode; updateTabsUI(); refreshList(); } }, [label]);
       tabButtons[mode] = btn;
       tabsRow.appendChild(btn);
@@ -573,7 +579,11 @@
       list.innerHTML = '';
       list.appendChild(el('p', { class: 'loading' }, ['Carregando...']));
       try {
-        var filters = { unassigned: av.mode === 'inbox', mine: av.mode === 'mine', status: av.status, overdue: av.overdue, pendingAnalyst: av.pending, q: av.q };
+        var filters = {
+          unassigned: av.mode === 'inbox', mine: av.mode === 'mine',
+          status: av.mode === 'closed' ? 'encerrado' : av.status,
+          overdue: av.overdue, pendingAnalyst: av.pending, q: av.q
+        };
         var tickets = await call('listTickets', filters);
         list.innerHTML = '';
         if (tickets.length === 0) {
@@ -839,7 +849,7 @@
   function buildTransferModalBody_(t, onDone, closeModal) {
     var box = el('div', {});
     box.appendChild(el('p', { style: 'margin:0 0 10px; font-size:11.5px; color:var(--ink-soft);' },
-      ['Responsável atual: ', el('b', { style: 'color:var(--ink);' }, [t.assignedTo || 'ninguém — na caixa de entrada geral'])]));
+      ['Responsável atual: ', el('b', { style: 'color:var(--ink);' }, [t.assignedToName || t.assignedTo || 'ninguém — na caixa de entrada geral'])]));
     var analystSelect = el('select', {});
     var deptSelect = el('select', {}, state.departments.map(function (d) {
       var opt = el('option', { value: d.name }, [d.name]);
@@ -1003,10 +1013,10 @@
       // Dados vindos da aba Colaboradores (ADP) — só o analista vê, é pra
       // ajudar no atendimento (por exemplo, saber se é alguém recém
       // admitido antes de responder um chamado de primeiro acesso).
-      (isAnalyst && c) ? el('div', { style: 'margin-top:6px;' }, [
-        c.filial ? el('p', { style: 'margin:0; font-size:11.5px; color:var(--ink-soft);' }, ['Filial: ' + c.filial]) : null,
-        c.celular ? el('p', { style: 'margin:0; font-size:11.5px; color:var(--ink-soft);' }, ['Celular: ' + c.celular]) : null,
-        c.dataAdmissao ? el('p', { style: 'margin:0; font-size:11.5px; color:var(--ink-soft);' }, ['Admissão: ' + new Date(c.dataAdmissao).toLocaleDateString('pt-BR')]) : null
+      (isAnalyst && c) ? el('div', { style: 'margin-top:6px; display:flex; flex-direction:column; gap:2px;' }, [
+        c.filial ? el('p', { style: 'margin:0; font-size:12.5px; color:var(--ink);' }, ['Filial: ', el('b', {}, [c.filial])]) : null,
+        c.celular ? el('p', { style: 'margin:0; font-size:12.5px; color:var(--ink);' }, ['Celular: ', el('b', {}, [c.celular])]) : null,
+        c.dataAdmissao ? el('p', { style: 'margin:0; font-size:12.5px; color:var(--ink);' }, ['Admissão: ', el('b', {}, [new Date(c.dataAdmissao).toLocaleDateString('pt-BR')])]) : null
       ]) : null,
       el('hr', { style: 'border:none; border-top:1px solid var(--line-soft); margin:8px 0;' }),
       el('p', { style: 'margin:0; font-size:11.5px;' }, ['Prazo: ' + (t.slaDueAt ? formatDate_(t.slaDueAt) : '—')]),
