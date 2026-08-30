@@ -205,9 +205,17 @@ function getCurrentUser() {
     return String(c.Matricula).trim() === String(matriculaSalva).trim();
   })[0] : null;
   var colaborador = porEmail || porMatricula;
+  // Contas Google fora do domínio da empresa muitas vezes não expõem o
+  // e-mail pra getActiveUser() (limitação do Google, não tem como forçar) —
+  // por isso, reconhecido o colaborador (mesmo só pela matrícula), usa-se o
+  // e-mail cadastrado na ADP como identidade dele daqui pra frente. Sem
+  // isso o chamado nascia com SolicitanteEmail vazio: a notificação de
+  // e-mail não tinha pra quem mandar, e diferentes colaboradores sem
+  // e-mail detectado apareceriam com a mesma identidade ("").
+  var emailIdentidade = colaborador ? (colaborador.Email || email) : email;
 
   return {
-    email: email,
+    email: emailIdentidade,
     name: colaborador ? colaborador.Nome : (getMyProfile_().name || (email ? email.split('@')[0] : 'Colaborador')),
     role: 'employee',
     verified: !!colaborador,
@@ -236,7 +244,10 @@ function verifyMatricula(matricula) {
   // em vez de chamar getCurrentUser() de novo — evita depender de uma
   // segunda busca bater exatamente igual à que já confirmamos agora.
   return {
-    email: (Session.getActiveUser().getEmail() || '').trim(),
+    // Mesmo critério de getCurrentUser(): prefere o e-mail cadastrado na
+    // ADP, já que a conta Google de quem confirma por matrícula muitas
+    // vezes não é detectável (ver comentário em getCurrentUser()).
+    email: colaborador.Email || (Session.getActiveUser().getEmail() || '').trim(),
     name: colaborador.Nome,
     role: 'employee',
     verified: true,
