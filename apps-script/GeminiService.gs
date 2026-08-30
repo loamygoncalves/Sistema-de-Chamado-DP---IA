@@ -118,6 +118,7 @@ function rewriteAnswerWithGemini_(question, faq, opts) {
 
     text = String(text).trim();
     cache.put(cacheKey, text, GEMINI_CACHE_TTL_SECONDS_);
+    Logger.log('Gemini rewrite OK (modelo ' + config.model + ', assunto "' + faq.Departamento + '")');
     return text;
   } catch (e) {
     Logger.log('Gemini rewrite deu erro: ' + e);
