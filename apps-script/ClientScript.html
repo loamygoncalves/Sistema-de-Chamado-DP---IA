@@ -1037,60 +1037,124 @@
   /* ============================================================
      Dashboard
      ============================================================ */
+  var CHART_COLORS_ = { teal: '#00afaa', tealDark: '#007b75', orange: '#fba600', red: '#d6483e', ink: '#3c4a53', track: '#efefef' };
+
   async function renderDashboard(root) {
     root.appendChild(el('h2', { style: 'margin:0 0 12px; font-size:16px;' }, ['Dashboard']));
     var stats = await call('getDashboardStats');
     root.appendChild(el('div', { class: 'stat-grid' }, [
-      statCard_('Total de chamados', stats.total),
-      statCard_('Em aberto', stats.abertos),
-      statCard_('Atrasados', stats.atrasados)
+      statCard_('Total de chamados', stats.total, CHART_COLORS_.tealDark),
+      statCard_('Em aberto', stats.abertos, CHART_COLORS_.orange),
+      statCard_('Atrasados', stats.atrasados, stats.atrasados > 0 ? CHART_COLORS_.red : CHART_COLORS_.teal)
     ]));
 
-    var totalResolvido = stats.iaResolvidos + stats.analistaResolvidos;
-    var pctIa = totalResolvido ? Math.round((stats.iaResolvidos / totalResolvido) * 100) : 0;
-    root.appendChild(el('div', { class: 'card' }, [
-      el('h3', { style: 'margin:0 0 4px; font-size:14px;' }, ['IA x Analista']),
-      el('p', { style: 'margin:0 0 10px; font-size:11px; color:var(--ink-soft);' },
-        ['De quem teve a dúvida resolvida (direto pela IA ou abrindo chamado), quanto % a IA resolveu sozinha.']),
-      el('div', { class: 'stat-grid' }, [
-        statCard_('Resolvido pela IA', stats.iaResolvidos),
-        statCard_('Resolvido por analista', stats.analistaResolvidos),
-        statCard_('% pela IA', pctIa + '%')
-      ])
-    ]));
+    root.appendChild(donutCard_(
+      'IA x Analista',
+      'De quem teve a dúvida resolvida (direto pela IA ou abrindo chamado), quanto % a IA resolveu sozinha.',
+      [
+        { label: 'Resolvido pela IA', value: stats.iaResolvidos, color: CHART_COLORS_.teal },
+        { label: 'Resolvido por analista', value: stats.analistaResolvidos, color: CHART_COLORS_.orange }
+      ]
+    ));
 
-    root.appendChild(rankedListCard_('Chamados em aberto por categoria', stats.abertosPorCategoria, function (v) { return String(v); }));
+    var abertosPares = Object.keys(stats.abertosPorCategoria)
+      .map(function (dep) { return [dep, stats.abertosPorCategoria[dep]]; })
+      .sort(function (a, b) { return b[1] - a[1]; });
+    root.appendChild(barListCard_('Chamados em aberto por categoria', null, abertosPares, {}));
 
-    var tempoOrdenado = Object.keys(stats.tempoMedioPorCategoria)
-      .sort(function (a, b) { return stats.tempoMedioPorCategoria[b] - stats.tempoMedioPorCategoria[a]; });
-    if (tempoOrdenado.length) {
-      var tempoCard = el('div', { class: 'card' }, [
-        el('h3', { style: 'margin:0 0 4px; font-size:14px;' }, ['Tempo médio até a 1ª resposta, por categoria']),
-        el('p', { style: 'margin:0 0 10px; font-size:11px; color:var(--ink-soft);' }, ['Da abertura até a 1ª resposta do analista (tempo corrido, não é horário comercial). Mais lenta no topo.'])
-      ]);
-      tempoOrdenado.forEach(function (dept) {
-        tempoCard.appendChild(el('div', { style: 'display:flex; justify-content:space-between; font-size:12.5px; padding:4px 0; border-bottom:1px solid var(--line-soft);' }, [
-          el('span', {}, [dept]), el('span', { class: 'mono' }, [formatHoras_(stats.tempoMedioPorCategoria[dept])])
-        ]));
-      });
-      root.appendChild(tempoCard);
-    }
+    var tempoPares = Object.keys(stats.tempoMedioPorCategoria)
+      .map(function (dep) { return [dep, stats.tempoMedioPorCategoria[dep]]; })
+      .sort(function (a, b) { return b[1] - a[1]; });
+    root.appendChild(barListCard_(
+      'Tempo médio até a 1ª resposta, por categoria',
+      'Da abertura até a 1ª resposta do analista (tempo corrido, não é horário comercial). Mais lenta no topo.',
+      tempoPares,
+      {
+        formatValue: formatHoras_,
+        colorFor: function (horas) { return horas >= 4 ? CHART_COLORS_.red : horas >= 1 ? CHART_COLORS_.orange : CHART_COLORS_.teal; }
+      }
+    ));
 
-    root.appendChild(rankedListCard_('Chamados por categoria (total)', stats.porDepartamento, function (v) { return String(v); }));
+    var totalPares = Object.keys(stats.porDepartamento)
+      .map(function (dep) { return [dep, stats.porDepartamento[dep]]; })
+      .sort(function (a, b) { return b[1] - a[1]; });
+    root.appendChild(barListCard_('Chamados por categoria (total)', null, totalPares, { colorFor: function () { return CHART_COLORS_.tealDark; } }));
   }
 
-  function rankedListCard_(title, mapa, formatValue) {
-    var card = el('div', { class: 'card' }, [el('h3', { style: 'margin:0 0 10px; font-size:14px;' }, [title])]);
-    var chaves = Object.keys(mapa).sort(function (a, b) { return mapa[b] - mapa[a]; });
-    if (chaves.length === 0) {
-      card.appendChild(el('p', { style: 'margin:0; font-size:11.5px; color:var(--ink-soft);' }, ['Nada por aqui ainda.']));
+  /** Gráfico de rosca simples via SVG (sem biblioteca — mantém o app sem
+   * dependência externa nenhuma). Como var(--...) não funciona em atributo
+   * de SVG (só em propriedade de estilo), as cores aqui vêm em hex direto,
+   * espelhando as mesmas usadas no resto da tela (ver CHART_COLORS_). */
+  function donutCard_(title, subtitle, segmentos) {
+    var total = segmentos.reduce(function (s, x) { return s + x.value; }, 0);
+    var r = 42, cx = 50, cy = 50, sw = 16, circunferencia = 2 * Math.PI * r;
+    var svgHtml;
+    if (total === 0) {
+      svgHtml = '<svg viewBox="0 0 100 100" width="120" height="120">' +
+        '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" stroke="' + CHART_COLORS_.track + '" stroke-width="' + sw + '" />' +
+        '</svg>';
     } else {
-      chaves.forEach(function (chave) {
-        card.appendChild(el('div', { style: 'display:flex; justify-content:space-between; font-size:12.5px; padding:4px 0; border-bottom:1px solid var(--line-soft);' }, [
-          el('span', {}, [chave]), el('span', { class: 'mono' }, [formatValue(mapa[chave])])
-        ]));
-      });
+      var offset = 0;
+      var arcos = segmentos.map(function (seg) {
+        var dash = (seg.value / total) * circunferencia;
+        var arco = '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" stroke="' + seg.color + '" stroke-width="' + sw + '" ' +
+          'stroke-dasharray="' + dash + ' ' + (circunferencia - dash) + '" stroke-dashoffset="' + (-offset) + '" transform="rotate(-90 ' + cx + ' ' + cy + ')" />';
+        offset += dash;
+        return arco;
+      }).join('');
+      var pct = Math.round((segmentos[0].value / total) * 100);
+      svgHtml = '<svg viewBox="0 0 100 100" width="120" height="120">' + arcos +
+        '<text x="50" y="57" text-anchor="middle" font-size="22" font-weight="800" fill="' + CHART_COLORS_.ink + '">' + pct + '%</text></svg>';
     }
+    var svgWrap = el('div', { style: 'flex-shrink:0;' });
+    svgWrap.innerHTML = svgHtml;
+
+    var legend = el('div', { style: 'display:flex; flex-direction:column; gap:8px; justify-content:center;' },
+      segmentos.map(function (seg) {
+        return el('div', { style: 'display:flex; align-items:center; gap:8px; font-size:12.5px;' }, [
+          el('span', { style: 'width:10px; height:10px; border-radius:50%; background:' + seg.color + '; display:inline-block; flex-shrink:0;' }, []),
+          el('span', { style: 'color:var(--ink);' }, [seg.label + ': ']),
+          el('b', {}, [String(seg.value)])
+        ]);
+      }));
+
+    return el('div', { class: 'card' }, [
+      el('h3', { style: 'margin:0 0 4px; font-size:14px;' }, [title]),
+      subtitle ? el('p', { style: 'margin:0 0 14px; font-size:11px; color:var(--ink-soft);' }, [subtitle]) : null,
+      total === 0
+        ? el('p', { style: 'margin:0; font-size:11.5px; color:var(--ink-soft);' }, ['Sem dados ainda.'])
+        : el('div', { style: 'display:flex; align-items:center; gap:24px; flex-wrap:wrap;' }, [svgWrap, legend])
+    ]);
+  }
+
+  /** Lista em forma de gráfico de barras horizontal (barra proporcional ao
+   * maior valor da lista) — mais fácil de escanear do que uma tabela de
+   * número solto. */
+  function barListCard_(title, subtitle, pares, opts) {
+    opts = opts || {};
+    var card = el('div', { class: 'card' }, [el('h3', { style: 'margin:0 0 4px; font-size:14px;' }, [title])]);
+    if (subtitle) card.appendChild(el('p', { style: 'margin:0 0 12px; font-size:11px; color:var(--ink-soft);' }, [subtitle]));
+    if (pares.length === 0) {
+      card.appendChild(el('p', { style: 'margin:0; font-size:11.5px; color:var(--ink-soft);' }, ['Nada por aqui ainda.']));
+      return card;
+    }
+    var max = Math.max.apply(null, pares.map(function (p) { return p[1]; })) || 1;
+    var bars = el('div', { style: subtitle ? '' : 'margin-top:4px;' });
+    pares.forEach(function (par) {
+      var pct = Math.max(6, Math.round((par[1] / max) * 100));
+      var cor = opts.colorFor ? opts.colorFor(par[1]) : CHART_COLORS_.teal;
+      var valorTexto = opts.formatValue ? opts.formatValue(par[1]) : String(par[1]);
+      bars.appendChild(el('div', { style: 'margin-bottom:10px;' }, [
+        el('div', { style: 'display:flex; justify-content:space-between; font-size:12.5px; margin-bottom:4px;' }, [
+          el('span', { style: 'color:var(--ink);' }, [par[0]]),
+          el('span', { style: 'font-weight:700; color:var(--ink);' }, [valorTexto])
+        ]),
+        el('div', { style: 'background:' + CHART_COLORS_.track + '; border-radius:6px; height:9px; overflow:hidden;' }, [
+          el('div', { style: 'width:' + pct + '%; height:100%; background:' + cor + '; border-radius:6px;' }, [])
+        ])
+      ]));
+    });
+    card.appendChild(bars);
     return card;
   }
 
@@ -1099,8 +1163,10 @@
     return horas.toFixed(1).replace('.', ',') + 'h';
   }
 
-  function statCard_(label, value) {
-    return el('div', { class: 'card stat' }, [el('div', { class: 'value' }, [String(value)]), el('div', { class: 'label' }, [label])]);
+  function statCard_(label, value, accentColor) {
+    return el('div', { class: 'card stat', style: accentColor ? 'border-left:4px solid ' + accentColor + ';' : '' }, [
+      el('div', { class: 'value' }, [String(value)]), el('div', { class: 'label' }, [label])
+    ]);
   }
 
   window.addEventListener('DOMContentLoaded', boot);
