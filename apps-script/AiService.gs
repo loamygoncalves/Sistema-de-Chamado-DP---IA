@@ -139,6 +139,26 @@ function pareceCortesiaComErro_(question) {
   });
 }
 
+// A cortesia acima é só o lado de quem PERGUNTA ("tudo bem?"). Falta o
+// lado de quem RESPONDE — "estou bem", "to bem, obrigado" — que a IA
+// também provoca (ela mesma pergunta "em que posso te ajudar?"). Sem
+// isto, "estou bem" (curta, sem assunto próprio) virava "acompanhamento"
+// e herdava o assunto anterior da conversa, respondendo (errado) como se
+// fosse sobre o FAQ de antes — foi exatamente o que aconteceu.
+var CORTESIA_RESPOSTA_ = /^\s*(eu )?(estou|to|tou|tava|ando|ta)?\s*(tudo )?(bem|bom|tranquilo|numa boa|joia)\s*(mesmo|sim|obrigad[oa])?\s*$/;
+
+function pareceRespostaCortesia_(question) {
+  var normalizado = normalize_(question).trim();
+  var palavras = normalizado.split(/\s+/);
+  if (palavras.length > 4) return false;
+  if (CORTESIA_RESPOSTA_.test(normalizado)) return true;
+  // Mesmo com erro de digitação em "bem"/"bom" (ex.: "to bm"), pelo mesmo
+  // motivo da checagem de pergunta acima.
+  return palavras.some(function (p) {
+    return ['bem', 'bom', 'tranquilo', 'joia'].some(function (alvo) { return p !== alvo && p.length > 1 && levenshtein_(p, alvo, 1) <= 1; });
+  }) && palavras.length <= 3;
+}
+
 // Pedido pra pular direto pro atendimento humano, sem antes tentar tirar
 // a dúvida com a IA ("quero abrir chamado", "falar com o dp/analista/
 // atendente/humano"). A ideia não é recusar — é sugerir, com jeito,
@@ -176,6 +196,7 @@ function detectIntent_(question, history) {
   if (SAUDACAO_.test(t) && palavras <= 4) return 'saudacao';
   if (CORTESIA_.test(normalize_(question)) && palavras <= 5) return 'cortesia';
   if (pareceCortesiaComErro_(question)) return 'cortesia';
+  if (pareceRespostaCortesia_(question)) return 'cortesia';
   if (DESPEDIDA_.test(t) && palavras <= 6) return 'despedida';
   for (var k = 0; k < PEDIDO_ATENDENTE_.length; k++) {
     if (PEDIDO_ATENDENTE_[k].test(t) && palavras <= 8) return 'pedido_atendente';
