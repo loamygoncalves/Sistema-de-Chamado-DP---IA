@@ -907,11 +907,20 @@
     var isAnalyst = state.user.role === 'analyst';
     mainCol.appendChild(buildComposer_(t, isAnalyst, function () { openTicketDetail_(t.id, fromView); }));
 
+    var c = detail.colaborador;
     sideCol.appendChild(el('div', { class: 'card' }, [
       el('h3', { style: 'margin:0 0 8px; font-size:13px;' }, ['Solicitante']),
       el('p', { style: 'margin:0; font-weight:700;' }, [t.requesterName]),
       el('p', { style: 'margin:0; font-size:11.5px; color:var(--ink-soft);' }, [t.requesterEmail]),
       t.matricula ? el('p', { style: 'margin:0; font-size:11.5px; color:var(--ink-soft);' }, ['Matrícula ' + t.matricula]) : null,
+      // Dados vindos da aba Colaboradores (ADP) — só o analista vê, é pra
+      // ajudar no atendimento (por exemplo, saber se é alguém recém
+      // admitido antes de responder um chamado de primeiro acesso).
+      (isAnalyst && c) ? el('div', { style: 'margin-top:6px;' }, [
+        c.filial ? el('p', { style: 'margin:0; font-size:11.5px; color:var(--ink-soft);' }, ['Filial: ' + c.filial]) : null,
+        c.celular ? el('p', { style: 'margin:0; font-size:11.5px; color:var(--ink-soft);' }, ['Celular: ' + c.celular]) : null,
+        c.dataAdmissao ? el('p', { style: 'margin:0; font-size:11.5px; color:var(--ink-soft);' }, ['Admissão: ' + new Date(c.dataAdmissao).toLocaleDateString('pt-BR')]) : null
+      ]) : null,
       el('hr', { style: 'border:none; border-top:1px solid var(--line-soft); margin:8px 0;' }),
       el('p', { style: 'margin:0; font-size:11.5px;' }, ['Prazo: ' + (t.slaDueAt ? formatDate_(t.slaDueAt) : '—')])
     ]));

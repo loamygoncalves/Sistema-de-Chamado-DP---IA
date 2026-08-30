@@ -306,6 +306,14 @@ function nextProtocol_() {
 
 /** SLA em "horas úteis" simplificado: pula sábado/domingo, mas não feriados
  * (o backend real usa um calendário de feriados nacionais — aqui não). */
+/** Horário comercial: segunda a sexta, das 9h às 18h. Fora disso (noite,
+ * madrugada, fim de semana) não conta como tempo de SLA passando. */
+function dentroDoHorarioComercial_(date) {
+  var dia = date.getDay();
+  var hora = date.getHours();
+  return dia >= 1 && dia <= 5 && hora >= 9 && hora < 18;
+}
+
 function computeSlaDueAt_(priority, slaHorasMax) {
   var hours = SLA_HORAS_POR_PRIORIDADE[priority] || 48;
   if (slaHorasMax) hours = Math.min(hours, Number(slaHorasMax));
@@ -313,8 +321,7 @@ function computeSlaDueAt_(priority, slaHorasMax) {
   var remaining = hours;
   while (remaining > 0) {
     date = new Date(date.getTime() + 60 * 60 * 1000);
-    var day = date.getDay();
-    if (day !== 0 && day !== 6) remaining -= 1;
+    if (dentroDoHorarioComercial_(date)) remaining -= 1;
   }
   return date;
 }
@@ -408,7 +415,26 @@ function getTicketDetail(ticketId) {
   return {
     ticket: serializeTicket_(ticket),
     history: history.map(serializeHistory_),
-    attachments: listAttachments(ticketId)
+    attachments: listAttachments(ticketId),
+    colaborador: colaboradorInfoPorMatricula_(ticket.Matricula)
+  };
+}
+
+/** Dados extra do colaborador (Filial, Celular, DataAdmissao) vindos da aba
+ * Colaboradores, pra completar o card do solicitante no chamado — o
+ * cadastro de abertura só pede Nome/Matrícula, o resto quem já tem é a ADP.
+ * Sem bater a matrícula (chamado antigo, ou colaborador fora da base),
+ * devolve null e o card mostra só o que já tinha antes. */
+function colaboradorInfoPorMatricula_(matricula) {
+  var mat = String(matricula || '').trim();
+  if (!mat) return null;
+  var colaborador = rowsAsObjects_(sheet_(SHEETS.COLABORADORES, HEADERS.Colaboradores))
+    .filter(function (c) { return String(c.Matricula).trim() === mat; })[0];
+  if (!colaborador) return null;
+  return {
+    filial: colaborador.Filial || '',
+    celular: colaborador.Celular || '',
+    dataAdmissao: toIso_(colaborador.DataAdmissao)
   };
 }
 

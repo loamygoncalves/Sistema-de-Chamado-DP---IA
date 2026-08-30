@@ -137,8 +137,9 @@ parâmetro é ignorado):
   não escala como o RAG do backend real.
 - **Sem fila assíncrona** — tudo roda de forma síncrona na mesma execução
   (limite de 6 minutos por chamada do Apps Script).
-- **SLA simplificado** — pula sábado/domingo, mas não feriados nacionais
-  (o backend real usa um calendário de feriados).
+- **SLA simplificado** — conta só horário comercial (segunda a sexta, 9h às
+  18h), mas não feriados nacionais (o backend real usa um calendário de
+  feriados).
 - **Identidade = conta Google** — não há tela de login/senha própria; quem
   abre o link usa a própria conta Google (pode ser pessoal, já que nem
   todo colaborador tem e-mail do domínio). Quem não é reconhecido pelo
@@ -186,6 +187,15 @@ time ou rodar num piloto pequeno sem precisar de infraestrutura própria.
      mandando para chamado coisas que a base já responde.
    - `EMAIL_NOTIFICATIONS_ENABLED` — defina como `false` para desligar os
      e-mails (por padrão estão ligados).
+   - `EMAIL_FROM` — endereço que aparece como remetente (ex.:
+     `dp@beepsaude.com.br`). **Antes de configurar**, esse endereço precisa
+     estar cadastrado como "Enviar e-mail como" nas configurações do Gmail
+     da conta que fez o deploy (Configurações > Contas e importação >
+     "Enviar e-mail como" > Adicionar outro endereço de e-mail > seguir a
+     verificação). Sem isso, o envio falha silenciosamente (o chamado
+     continua funcionando normalmente, só não sai o e-mail). Sem essa
+     propriedade configurada, o e-mail sai da própria conta que fez o
+     deploy, como sempre foi.
 9. **Implante como app da Web**: no editor, **Implantar > Nova implantação**
    > tipo "App da Web". Configure:
    - **Executar como**: Eu (sua conta)
