@@ -260,10 +260,11 @@ function isReferential_(question) {
     /^\s*e\s/.test(text);
 }
 
-/** Este FAQ já foi entregue nesta conversa? Compara o começo do texto da
- * resposta com o que a IA já disse — se a pessoa insiste no assunto, é
- * porque a base não tem o detalhe que ela quer, e repetir não ajuda. */
-function alreadyAnswered_(faq, history) {
+/** Este FAQ já apareceu nesta conversa? Só para decidir o TOM da resposta
+ * ("complementando o que falamos" em vez de "sobre X, aqui vai") — não
+ * decide sozinho se deve parar de responder, isso é o alreadyAnswered_
+ * abaixo. Mesma checagem de fingerprint, sem comparar pergunta nenhuma. */
+function faqJaApareceu_(faq, history) {
   var body = String(faq.Resposta).trim();
   if (body.length < 40) return false;
   var fingerprint = body.substring(0, 60);
@@ -271,6 +272,41 @@ function alreadyAnswered_(faq, history) {
     if (history[i].role === 'assistant' && history[i].content.indexOf(fingerprint) !== -1) return true;
   }
   return false;
+}
+
+/**
+ * Este FAQ já foi entregue nesta conversa E a pergunta atual não traz
+ * NENHUMA palavra de conteúdo nova em relação à pergunta que gerou aquela
+ * resposta? Só então é repetição de verdade — a pessoa insistindo no
+ * mesmo pedido depois de já ter recebido tudo o que a base tem sobre
+ * aquele ponto específico.
+ *
+ * Um acompanhamento que aprofunda o MESMO assunto com um detalhe novo (ex.:
+ * depois de perguntar sobre banco de horas em geral, "e se eu for
+ * plantonista, ganho hora extra na folga?") NÃO é repetição — é uma
+ * pergunta legítima que o próprio texto do FAQ já cobre. Tratar isso como
+ * "já respondi, base não detalha" quebra a conversa: foi exatamente esse
+ * o bug relatado (pergunta nova, mesmo FAQ, IA dizendo que não sabia).
+ */
+function alreadyAnswered_(faq, history, currentQuestion, vocabulary) {
+  var body = String(faq.Resposta).trim();
+  if (body.length < 40) return false;
+  var fingerprint = body.substring(0, 60);
+  var previousQuestion = null;
+  for (var i = 0; i < history.length; i++) {
+    if (history[i].role === 'assistant' && history[i].content.indexOf(fingerprint) !== -1) {
+      for (var j = i - 1; j >= 0; j--) {
+        if (history[j].role === 'user') { previousQuestion = history[j].content; break; }
+      }
+    }
+  }
+  if (!previousQuestion) return false;
+  if (!currentQuestion || !vocabulary) return true;
+
+  var currentTokens = analyzeQuery_(currentQuestion, vocabulary).tokens;
+  var previousTokens = analyzeQuery_(previousQuestion, vocabulary).tokens;
+  var trouxeAlgoNovo = currentTokens.some(function (tok) { return previousTokens.indexOf(tok) === -1; });
+  return !trouxeAlgoNovo;
 }
 
 /** Monta a resposta com cara de conversa: reconhece o assunto, entrega o
@@ -431,7 +467,7 @@ function askAi(question, history) {
   // então o que já foi respondido sai da disputa e a IA tenta a próxima
   // melhor opção, em vez de insistir no mesmo FAQ.
   if (isCorrection) {
-    var remaining = ranked.filter(function (r) { return !alreadyAnswered_(r.faq, recentHistory); });
+    var remaining = ranked.filter(function (r) { return !alreadyAnswered_(r.faq, recentHistory, question, index.vocabulary); });
     if (remaining.length > 0) {
       ranked = remaining;
       confidence = confidenceOf_(ranked[0], analyzed, thresholds);
@@ -440,12 +476,18 @@ function askAi(question, history) {
 
   var best = ranked[0];
 
-  // Se este FAQ já foi entregue nesta conversa, repeti-lo palavra por
-  // palavra não responde nada — foi o que aconteceu quando o colaborador
-  // perguntou "como consigo esse e-mail?" e recebeu o mesmo texto de novo.
-  // A base já deu o que tinha sobre o assunto: o honesto é dizer isso e
-  // oferecer o analista.
-  if (alreadyAnswered_(best.faq, recentHistory)) {
+  // O mesmo FAQ já apareceu nesta conversa: a resposta soa mais natural
+  // como continuação ("complementando") do que como uma introdução nova.
+  if (!isFollowUp && faqJaApareceu_(best.faq, recentHistory)) isFollowUp = true;
+
+  // Se este FAQ já foi entregue nesta conversa E a pergunta atual não traz
+  // nada de novo, repeti-lo palavra por palavra não responde nada — foi o
+  // que aconteceu quando o colaborador perguntou "como consigo esse
+  // e-mail?" e recebeu o mesmo texto de novo. A base já deu o que tinha
+  // sobre o assunto: o honesto é dizer isso e oferecer o analista. Mas se
+  // a pergunta trouxer um detalhe novo (ver alreadyAnswered_ acima), isso
+  // não entra aqui — cai no fluxo normal de resposta.
+  if (alreadyAnswered_(best.faq, recentHistory, question, index.vocabulary)) {
     return {
       answer: 'Sobre ' + (best.faq.Departamento || 'esse assunto') + ' eu já te passei tudo o que a nossa base tem — ' +
         'ela não detalha esse ponto específico que você está perguntando agora. Para não te dar uma resposta ' +
