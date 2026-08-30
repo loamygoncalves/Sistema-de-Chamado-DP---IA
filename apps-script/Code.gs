@@ -482,6 +482,12 @@ function addComment(ticketId, body, isInternal, newStatus) {
   if (!ticket) throw new Error('Chamado não encontrado.');
   var isOwner = ticket.SolicitanteEmail === user.email;
   if (!isOwner && user.role !== 'analyst') throw new Error('Sem permissão.');
+  // O analista só responde depois de vincular o chamado a alguém — é o que
+  // tira o chamado da caixa de entrada geral. Só visualizar (com os dados
+  // do colaborador) continua liberado sem vínculo, é só responder que pede.
+  if (user.role === 'analyst' && !ticket.AnalistaResponsavel) {
+    throw new Error('Vincule este chamado a um analista antes de responder (use "Assumir para mim").');
+  }
 
   var isInternalNote = user.role === 'analyst' && !!isInternal;
   addHistoryEntry_(ticketId, user.name, user.role === 'analyst' ? 'analista' : 'colaborador', isInternalNote, body);
@@ -529,15 +535,19 @@ function assumeTicket(ticketId) {
   return transferTicket(ticketId, user.email, null, 'Assumido pelo analista');
 }
 
-/** Status segue quem ficou responsável: com analista definido, o chamado
- * está sendo atendido; sem ninguém (voltou pra caixa de entrada), volta
- * para triagem — mesma regra automática do sistema real. */
+/** Status segue quem ficou responsável: sem ninguém, o chamado está na
+ * caixa de entrada geral (em_triagem); com analista definido, em
+ * atendimento. Uma vez vinculado a alguém, não volta mais para a caixa de
+ * entrada — só dá para transferir para outro analista (nunca "soltar"). */
 function transferTicket(ticketId, assignedToEmail, department, reason) {
   var user = getCurrentUser();
   requireAnalyst_(user);
   var sheet = sheet_(SHEETS.CHAMADOS, HEADERS.Chamados);
   var ticket = findRowById_(sheet, 'ID', ticketId);
   if (!ticket) throw new Error('Chamado não encontrado.');
+  if (ticket.AnalistaResponsavel && !assignedToEmail) {
+    throw new Error('Este chamado já está vinculado a um analista — transfira para outro analista em vez de devolver à caixa de entrada.');
+  }
 
   var previousAssignee = ticket.AnalistaResponsavel;
   var previousDept = ticket.Departamento;

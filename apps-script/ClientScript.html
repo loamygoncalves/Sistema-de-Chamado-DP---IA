@@ -627,6 +627,28 @@
     });
   }
 
+  /** Modal simples (overlay + card) — usado pelo Transferir e pelo
+   * Finalizar, que antes eram cartões fixos empilhados na barra lateral
+   * (um dos motivos dela ficar comprida demais). */
+  function openModal_(titleText, bodyNode) {
+    var overlay = el('div', {
+      style: 'position:fixed; inset:0; background:rgba(0,0,0,.45); display:flex; ' +
+        'align-items:center; justify-content:center; z-index:1000; padding:16px;',
+      onclick: function (ev) { if (ev.target === overlay) close(); }
+    });
+    var box = el('div', { class: 'card', style: 'max-width:420px; width:100%; max-height:85vh; overflow:auto;' }, [
+      el('div', { style: 'display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;' }, [
+        el('h3', { style: 'margin:0; font-size:14px;' }, [titleText]),
+        el('button', { class: 'btn ghost', style: 'padding:2px 8px;', onclick: function () { close(); } }, ['✕'])
+      ]),
+      bodyNode
+    ]);
+    overlay.appendChild(box);
+    function close() { document.body.removeChild(overlay); }
+    document.body.appendChild(overlay);
+    return close;
+  }
+
   function buildComposer_(t, isAnalyst, onDone) {
     var mode = 'publica';
     var box = el('div', { class: 'composer' });
@@ -638,34 +660,18 @@
       var btnInternal = el('button', { onclick: function () { mode = 'interna'; applyMode(); } }, ['🔒 Nota interna']);
       modeRow = el('div', { class: 'mode-row' }, [btnPublic, btnInternal]);
       box.appendChild(modeRow);
-
-      var cannedSelect = el('select', {
-        style: 'max-width:220px;', onchange: function (ev) {
-          var id = ev.target.value;
-          ev.target.value = '';
-          var chosen = (cannedSelect._data || []).filter(function (c) { return c.id === id; })[0];
-          if (chosen) textarea.value = textarea.value.trim() ? textarea.value + '\n\n' + chosen.content : chosen.content;
-        }
-      });
-      var cannedManagerBox = el('div', { style: 'display:none; margin-bottom:8px; border:1px solid var(--line); border-radius:8px; padding:10px; background:var(--paper);' });
-      var cannedManagerBtn = el('button', {
-        class: 'btn ghost', style: 'font-size:12px;', onclick: function () {
-          var willShow = cannedManagerBox.style.display === 'none';
-          cannedManagerBox.style.display = willShow ? 'block' : 'none';
-          cannedManagerBtn.textContent = willShow ? 'Fechar gerenciador' : 'Gerenciar respostas padrão';
-        }
-      }, ['Gerenciar respostas padrão']);
-      box.appendChild(el('div', { style: 'display:flex; gap:8px; align-items:center; margin-bottom:8px; flex-wrap:wrap;' }, [cannedSelect, cannedManagerBtn]));
-      box.appendChild(cannedManagerBox);
-      loadCannedResponses_(t.department, cannedSelect, cannedManagerBox);
     }
 
     box.appendChild(textarea);
 
+    // Rodapé compacto: à esquerda o status (só resposta pública), à
+    // direita anexar + respostas padrão + enviar — tudo em botões
+    // pequenos, em vez da faixa de seleção fixa e do card de anexos à
+    // parte que ocupavam a barra lateral inteira.
     var footer = el('div', { style: 'display:flex; justify-content:space-between; align-items:center; gap:8px; margin-top:8px; flex-wrap:wrap;' });
     var statusWrap = null;
     if (isAnalyst) {
-      statusSelect = el('select', { style: 'max-width:200px;' }, Object.keys(STATUS_LABEL).filter(function (s) { return s !== 'encerrado'; }).map(function (s) {
+      statusSelect = el('select', { style: 'max-width:190px;' }, Object.keys(STATUS_LABEL).filter(function (s) { return s !== 'encerrado'; }).map(function (s) {
         var opt = el('option', { value: s }, [STATUS_LABEL[s]]);
         if (s === 'aguardando_usuario') opt.setAttribute('selected', 'selected');
         return opt;
@@ -675,8 +681,48 @@
     } else {
       footer.appendChild(el('span', {}, ['']));
     }
+
+    var actionsRight = el('div', { style: 'display:flex; align-items:center; gap:6px;' });
+    if (isAnalyst) {
+      var fileInput = el('input', { type: 'file', style: 'display:none;' });
+      var attachBtn = el('button', {
+        class: 'btn ghost', title: 'Anexar arquivo', style: 'padding:6px 9px; font-size:14px;',
+        onclick: function () { fileInput.click(); }
+      }, ['📎']);
+      fileInput.addEventListener('change', async function () {
+        var file = fileInput.files[0];
+        if (!file) return;
+        attachBtn.setAttribute('disabled', 'disabled');
+        try {
+          var base64 = await readFileAsBase64_(file);
+          await call('uploadAttachment', t.id, file.name, file.type || 'application/octet-stream', base64);
+          onDone();
+        } catch (e) { alert('Falha ao anexar: ' + errorMessage(e)); attachBtn.removeAttribute('disabled'); }
+      });
+
+      var cannedSelect = el('select', {
+        title: 'Respostas padrão', style: 'max-width:40px; padding:6px 2px; text-align:center;',
+        onchange: function (ev) {
+          var id = ev.target.value;
+          ev.target.value = '';
+          var chosen = (cannedSelect._data || []).filter(function (c) { return c.id === id; })[0];
+          if (chosen) textarea.value = textarea.value.trim() ? textarea.value + '\n\n' + chosen.content : chosen.content;
+        }
+      });
+      loadCannedResponses_(t.department, cannedSelect);
+      var cannedManageBtn = el('button', {
+        class: 'btn ghost', title: 'Gerenciar respostas padrão', style: 'padding:6px 8px; font-size:12px;',
+        onclick: function () { openCannedManagerModal_(t.department, cannedSelect); }
+      }, ['⚙']);
+
+      actionsRight.appendChild(fileInput);
+      actionsRight.appendChild(attachBtn);
+      actionsRight.appendChild(cannedSelect);
+      actionsRight.appendChild(cannedManageBtn);
+    }
     var sendBtn = el('button', { class: 'btn primary', onclick: function () { send(); } }, ['Enviar']);
-    footer.appendChild(sendBtn);
+    actionsRight.appendChild(sendBtn);
+    footer.appendChild(actionsRight);
     box.appendChild(footer);
 
     function applyMode() {
@@ -707,75 +753,93 @@
     return box;
   }
 
-  async function loadCannedResponses_(department, selectEl, managerBox) {
+  async function loadCannedResponses_(department, selectEl) {
     var responses = await call('listCannedResponses', department);
     selectEl._data = responses;
     selectEl.innerHTML = '';
-    selectEl.appendChild(el('option', { value: '', disabled: 'disabled', selected: 'selected' }, ['Inserir resposta padrão...']));
+    selectEl.appendChild(el('option', { value: '', disabled: 'disabled', selected: 'selected' }, ['🗂']));
     responses.forEach(function (r) { selectEl.appendChild(el('option', { value: r.id }, [r.title])); });
+  }
 
-    managerBox.innerHTML = '';
-    responses.forEach(function (r) {
-      managerBox.appendChild(el('div', { style: 'display:flex; justify-content:space-between; gap:8px; font-size:12px; margin-bottom:4px;' }, [
-        el('span', {}, [r.title + (r.department ? '' : ' (todas as filas)')]),
-        el('button', {
-          class: 'btn ghost', style: 'color:var(--critical-ink); font-size:11.5px; padding:2px 6px;',
-          onclick: async function () { await call('deleteCannedResponse', r.id, department); loadCannedResponses_(department, selectEl, managerBox); }
-        }, ['Remover'])
-      ]));
-    });
-    var titleInput = el('input', { type: 'text', placeholder: 'Título', style: 'margin-top:6px;' });
+  /** Criar/remover respostas padrão virou um modal (botão de engrenagem ao
+   * lado do seletor no rodapé do composer), em vez de uma caixa que ficava
+   * sempre montada dentro do composer — mais um motivo da tela antiga
+   * ficar comprida. */
+  async function openCannedManagerModal_(department, selectEl) {
+    var responses = await call('listCannedResponses', department);
+    var titleInput = el('input', { type: 'text', placeholder: 'Título', style: 'margin-top:10px;' });
     var contentArea = el('textarea', { rows: 2, placeholder: 'Texto da resposta padrão...' });
     var genericCheck = el('input', { type: 'checkbox' });
-    managerBox.appendChild(titleInput);
-    managerBox.appendChild(contentArea);
-    managerBox.appendChild(el('div', { style: 'display:flex; justify-content:space-between; align-items:center; gap:8px; margin-top:6px;' }, [
-      el('label', { style: 'display:flex; gap:6px; align-items:center; font-size:11px; color:var(--ink-soft);' }, [genericCheck, 'Disponível em todas as filas']),
-      el('button', {
-        class: 'btn', style: 'font-size:12px;',
-        onclick: async function () {
-          var title = titleInput.value.trim(), content = contentArea.value.trim();
-          if (!title || !content) return;
-          await call('createCannedResponse', title, content, genericCheck.checked ? null : department);
-          loadCannedResponses_(department, selectEl, managerBox);
-        }
-      }, ['Salvar'])
-    ]));
+    var body = el('div', {}, [
+      responses.length
+        ? el('div', {}, responses.map(function (r) {
+          return el('div', { style: 'display:flex; justify-content:space-between; gap:8px; font-size:12px; margin-bottom:4px;' }, [
+            el('span', {}, [r.title + (r.department ? '' : ' (todas as filas)')]),
+            el('button', {
+              class: 'btn ghost', style: 'color:var(--critical-ink); font-size:11.5px; padding:2px 6px;',
+              onclick: async function () {
+                await call('deleteCannedResponse', r.id, department);
+                close();
+                loadCannedResponses_(department, selectEl);
+                openCannedManagerModal_(department, selectEl);
+              }
+            }, ['Remover'])
+          ]);
+        }))
+        : el('p', { style: 'margin:0; font-size:11.5px; color:var(--ink-soft);' }, ['Nenhuma resposta padrão ainda.']),
+      el('hr', { style: 'border:none; border-top:1px solid var(--line-soft); margin:10px 0;' }),
+      el('label', { class: 'field' }, [el('span', {}, ['Nova resposta padrão']), titleInput]),
+      contentArea,
+      el('div', { style: 'display:flex; justify-content:space-between; align-items:center; gap:8px; margin-top:6px;' }, [
+        el('label', { style: 'display:flex; gap:6px; align-items:center; font-size:11px; color:var(--ink-soft);' }, [genericCheck, 'Disponível em todas as filas']),
+        el('button', {
+          class: 'btn', style: 'font-size:12px;',
+          onclick: async function () {
+            var title = titleInput.value.trim(), content = contentArea.value.trim();
+            if (!title || !content) return;
+            await call('createCannedResponse', title, content, genericCheck.checked ? null : department);
+            close();
+            loadCannedResponses_(department, selectEl);
+            openCannedManagerModal_(department, selectEl);
+          }
+        }, ['Salvar'])
+      ])
+    ]);
+    var close = openModal_('Respostas padrão', body);
   }
 
-  function buildAtendimentoPanel_(t, onDone) {
-    var box = el('div', { class: 'card' });
-    box.appendChild(el('h3', { style: 'margin:0 0 8px; font-size:13px;' }, ['Atendimento']));
-    box.appendChild(el('p', { style: 'margin:0 0 8px; font-size:11.5px; color:var(--ink-soft);' },
+  /** Status + prioridade agora é uma linha compacta dentro do card do
+   * Solicitante, em vez de um card "Atendimento" à parte — "Assumir para
+   * mim" também não mora mais aqui: virou a chamada de ação que substitui
+   * o composer enquanto o chamado não está vinculado a ninguém (ver
+   * renderTicketDetail), porque é só assim que dá pra responder. */
+  function buildStatusPriorityMini_(t, onDone) {
+    var statusSel = el('select', {
+      style: 'font-size:11.5px;',
+      onchange: async function (ev) { try { await call('changeStatus', t.id, ev.target.value); onDone(); } catch (e) { alert(errorMessage(e)); } }
+    }, Object.keys(STATUS_LABEL).filter(function (s) { return s !== 'encerrado'; }).map(function (s) {
+      var opt = el('option', { value: s }, [STATUS_LABEL[s]]);
+      if (s === t.status) opt.setAttribute('selected', 'selected');
+      return opt;
+    }));
+    var prioritySel = el('select', {
+      style: 'font-size:11.5px;',
+      onchange: async function (ev) { try { await call('changePriority', t.id, ev.target.value); onDone(); } catch (e) { alert(errorMessage(e)); } }
+    }, Object.keys(PRIORITY_LABEL).map(function (p) {
+      var opt = el('option', { value: p }, [PRIORITY_LABEL[p]]);
+      if (p === t.priority) opt.setAttribute('selected', 'selected');
+      return opt;
+    }));
+    return el('div', { style: 'display:flex; gap:6px; margin-top:8px;' }, [statusSel, prioritySel]);
+  }
+
+  /** Conteúdo do modal "Transferir" — uma vez o chamado tendo responsável,
+   * não oferece mais a opção de devolver pra caixa de entrada (o servidor
+   * também recusa), só transferir para outro analista. */
+  function buildTransferModalBody_(t, onDone, closeModal) {
+    var box = el('div', {});
+    box.appendChild(el('p', { style: 'margin:0 0 10px; font-size:11.5px; color:var(--ink-soft);' },
       ['Responsável atual: ', el('b', { style: 'color:var(--ink);' }, [t.assignedTo || 'ninguém — na caixa de entrada geral'])]));
-    box.appendChild(el('button', {
-      class: 'btn', style: 'width:100%; margin-bottom:10px;',
-      onclick: async function () { try { await call('assumeTicket', t.id); onDone(); } catch (e) { alert(errorMessage(e)); } }
-    }, ['Assumir para mim']));
-
-    box.appendChild(el('label', { class: 'field' }, [el('span', {}, ['Status']),
-      el('select', {
-        onchange: async function (ev) { try { await call('changeStatus', t.id, ev.target.value); onDone(); } catch (e) { alert(errorMessage(e)); } }
-      }, Object.keys(STATUS_LABEL).filter(function (s) { return s !== 'encerrado'; }).map(function (s) {
-        var opt = el('option', { value: s }, [STATUS_LABEL[s]]);
-        if (s === t.status) opt.setAttribute('selected', 'selected');
-        return opt;
-      }))]));
-
-    box.appendChild(el('label', { class: 'field' }, [el('span', {}, ['Prioridade (recalcula o prazo)']),
-      el('select', {
-        onchange: async function (ev) { try { await call('changePriority', t.id, ev.target.value); onDone(); } catch (e) { alert(errorMessage(e)); } }
-      }, Object.keys(PRIORITY_LABEL).map(function (p) {
-        var opt = el('option', { value: p }, [PRIORITY_LABEL[p]]);
-        if (p === t.priority) opt.setAttribute('selected', 'selected');
-        return opt;
-      }))]));
-    return box;
-  }
-
-  function buildTransferPanel_(t, onDone) {
-    var box = el('div', { class: 'card' });
-    box.appendChild(el('h3', { style: 'margin:0 0 8px; font-size:13px;' }, ['Transferir chamado']));
     var analystSelect = el('select', {});
     var deptSelect = el('select', {}, state.departments.map(function (d) {
       var opt = el('option', { value: d.name }, [d.name]);
@@ -791,7 +855,7 @@
     transferBtn.addEventListener('click', async function () {
       try {
         await call('transferTicket', t.id, analystSelect.value || null, deptSelect.value, reasonInput.value.trim() || null);
-        onDone();
+        closeModal(); onDone();
       } catch (e) { alert(errorMessage(e)); }
     });
 
@@ -799,14 +863,14 @@
     box.appendChild(el('label', { class: 'field' }, [el('span', {}, ['Fila']), deptSelect]));
     box.appendChild(el('label', { class: 'field' }, [el('span', {}, ['Motivo']), reasonInput]));
     box.appendChild(transferBtn);
-    loadAnalystsInto_(analystSelect, t.assignedTo);
+    loadAnalystsInto_(analystSelect, t.assignedTo, /* allowUnassigned */ !t.assignedTo);
     return box;
   }
 
-  async function loadAnalystsInto_(selectEl, currentAssignee) {
+  async function loadAnalystsInto_(selectEl, currentAssignee, allowUnassigned) {
     var analysts = await call('getAnalysts');
     selectEl.innerHTML = '';
-    selectEl.appendChild(el('option', { value: '' }, ['Caixa de entrada geral (sem analista)']));
+    if (allowUnassigned) selectEl.appendChild(el('option', { value: '' }, ['Caixa de entrada geral (sem analista)']));
     analysts.forEach(function (a) {
       var opt = el('option', { value: a.email }, [a.name + ' (' + a.email + ')']);
       if (a.email === currentAssignee) opt.setAttribute('selected', 'selected');
@@ -814,45 +878,31 @@
     });
   }
 
-  function buildAttachmentsPanel_(t, attachments, onDone) {
-    var box = el('div', { class: 'card' });
-    box.appendChild(el('h3', { style: 'margin:0 0 8px; font-size:13px;' }, ['Anexos']));
-    if (attachments.length === 0) {
-      box.appendChild(el('p', { style: 'margin:0 0 8px; font-size:11.5px; color:var(--ink-soft);' }, ['Nenhum anexo.']));
-    } else {
-      attachments.forEach(function (a) {
-        box.appendChild(el('div', {}, [el('a', { href: a.url, target: '_blank', style: 'font-size:12px; color:var(--brand-ink);' }, ['📎 ' + a.name])]));
-      });
-    }
-    var fileInput = el('input', { type: 'file', style: 'margin-top:8px;' });
-    var uploadBtn = el('button', {
-      class: 'btn', style: 'margin-top:6px; width:100%;',
-      onclick: async function () {
-        var file = fileInput.files[0];
-        if (!file) return;
-        uploadBtn.disabled = true;
-        try {
-          var base64 = await readFileAsBase64_(file);
-          await call('uploadAttachment', t.id, file.name, file.type || 'application/octet-stream', base64);
-          onDone();
-        } catch (e) { alert('Falha ao anexar: ' + errorMessage(e)); uploadBtn.disabled = false; }
-      }
-    }, ['Anexar']);
-    box.appendChild(fileInput);
-    box.appendChild(uploadBtn);
-    return box;
+  /** Só a lista de anexos já enviados — anexar um novo agora é pelo 📎 no
+   * rodapé do composer, então não precisa mais de um card com upload
+   * próprio aqui (outro pedaço que engordava a barra lateral). */
+  function buildAttachmentsList_(attachments) {
+    if (attachments.length === 0) return null;
+    return el('div', { class: 'card' }, [
+      el('h3', { style: 'margin:0 0 6px; font-size:13px;' }, ['Anexos']),
+      el('div', { style: 'display:flex; flex-direction:column; gap:2px;' }, attachments.map(function (a) {
+        return el('a', { href: a.url, target: '_blank', style: 'font-size:12px; color:var(--brand-ink);' }, ['📎 ' + a.name]);
+      }))
+    ]);
   }
 
-  async function buildClosePanel_(t, onDone) {
+  /** Conteúdo do modal "Finalizar" — igual pedido: abre com uma mensagem
+   * padrão de encerramento já preenchida (a do motivo mais comum),
+   * editável antes de confirmar. */
+  async function buildCloseModalBody_(t, onDone, closeModal) {
     var reasons = await call('getClosureReasons', t.id);
-    var box = el('div', { class: 'card' });
-    box.appendChild(el('h3', { style: 'margin:0 0 8px; font-size:13px;' }, ['Encerrar chamado']));
+    var box = el('div', {});
     if (reasons.length === 0) {
       box.appendChild(el('p', { style: 'margin:0; font-size:11.5px; color:var(--ink-soft);' }, ['Nenhum motivo de encerramento disponível para você neste chamado.']));
       return box;
     }
     var current = reasons[0];
-    var messageArea = el('textarea', { rows: 3 });
+    var messageArea = el('textarea', { rows: 4 });
     messageArea.value = current.defaultMessage;
     var edited = false;
     messageArea.addEventListener('input', function () { edited = true; });
@@ -868,10 +918,10 @@
       class: 'btn primary', style: 'width:100%;',
       onclick: async function () {
         closeBtn.disabled = true;
-        try { await call('closeTicket', t.id, current.value, messageArea.value.trim()); onDone(); }
+        try { await call('closeTicket', t.id, current.value, messageArea.value.trim()); closeModal(); onDone(); }
         catch (e) { alert('Não foi possível encerrar: ' + errorMessage(e)); closeBtn.disabled = false; }
       }
-    }, ['Encerrar chamado']);
+    }, ['Finalizar']);
     box.appendChild(closeBtn);
     return box;
   }
@@ -879,7 +929,29 @@
   async function renderTicketDetail(root, detail, fromView) {
     root.innerHTML = '';
     var t = detail.ticket;
+    var isAnalyst = state.user.role === 'analyst';
+    var refresh = function () { openTicketDetail_(t.id, fromView); };
     root.appendChild(el('button', { class: 'btn ghost', style: 'margin-bottom:12px;', onclick: function () { setView(fromView); } }, ['← Voltar']));
+
+    var actionButtons = [];
+    if (isAnalyst) {
+      actionButtons.push(el('button', {
+        class: 'btn', onclick: function () {
+          var close;
+          var body = buildTransferModalBody_(t, refresh, function () { close(); });
+          close = openModal_('Transferir chamado', body);
+        }
+      }, ['Transferir']));
+      if (t.status !== 'encerrado') {
+        actionButtons.push(el('button', {
+          class: 'btn primary', onclick: async function () {
+            var close;
+            var body = await buildCloseModalBody_(t, refresh, function () { close(); });
+            close = openModal_('Finalizar chamado', body);
+          }
+        }, ['Finalizar']));
+      }
+    }
 
     root.appendChild(el('div', { class: 'card' }, [
       el('div', { style: 'display:flex; justify-content:space-between; flex-wrap:wrap; gap:10px;' }, [
@@ -888,10 +960,13 @@
           el('h2', { style: 'margin:2px 0;' }, [t.subject]),
           el('p', { style: 'margin:0; font-size:11.5px; color:var(--ink-soft);' }, [t.department + ' · aberto em ' + formatDate_(t.openedAt)])
         ]),
-        el('div', { style: 'display:flex; gap:6px; flex-wrap:wrap; align-self:flex-start;' }, [
-          el('span', { class: 'pill ' + PRIORITY_CLASS[t.priority] }, [PRIORITY_LABEL[t.priority]]),
-          el('span', { class: 'pill ' + STATUS_CLASS[t.status] }, [STATUS_LABEL[t.status]]),
-          el('span', { class: 'pill ' + slaState_(t) }, [slaLabel_(t)])
+        el('div', { style: 'display:flex; flex-direction:column; align-items:flex-end; gap:8px;' }, [
+          el('div', { style: 'display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end;' }, [
+            el('span', { class: 'pill ' + PRIORITY_CLASS[t.priority] }, [PRIORITY_LABEL[t.priority]]),
+            el('span', { class: 'pill ' + STATUS_CLASS[t.status] }, [STATUS_LABEL[t.status]]),
+            el('span', { class: 'pill ' + slaState_(t) }, [slaLabel_(t)])
+          ]),
+          actionButtons.length ? el('div', { style: 'display:flex; gap:6px;' }, actionButtons) : null
         ])
       ])
     ]));
@@ -904,8 +979,20 @@
     mainCol.appendChild(el('div', { class: 'card' }, [thread]));
     drawThread_(thread, detail.history);
 
-    var isAnalyst = state.user.role === 'analyst';
-    mainCol.appendChild(buildComposer_(t, isAnalyst, function () { openTicketDetail_(t.id, fromView); }));
+    // Sem vínculo, o analista só visualiza — pra responder, primeiro
+    // assume o chamado (some da caixa de entrada geral pra sempre, só dá
+    // pra transferir depois, nunca devolver pra lá).
+    if (isAnalyst && !t.assignedTo && t.status !== 'encerrado') {
+      mainCol.appendChild(el('div', { class: 'card', style: 'text-align:center;' }, [
+        el('p', { style: 'margin:0 0 10px; font-size:13px; color:var(--ink-soft);' },
+          ['Este chamado ainda está na caixa de entrada geral — assuma para poder responder.']),
+        el('button', {
+          class: 'btn primary', onclick: async function () { try { await call('assumeTicket', t.id); refresh(); } catch (e) { alert(errorMessage(e)); } }
+        }, ['Assumir para mim'])
+      ]));
+    } else {
+      mainCol.appendChild(buildComposer_(t, isAnalyst, refresh));
+    }
 
     var c = detail.colaborador;
     sideCol.appendChild(el('div', { class: 'card' }, [
@@ -922,19 +1009,14 @@
         c.dataAdmissao ? el('p', { style: 'margin:0; font-size:11.5px; color:var(--ink-soft);' }, ['Admissão: ' + new Date(c.dataAdmissao).toLocaleDateString('pt-BR')]) : null
       ]) : null,
       el('hr', { style: 'border:none; border-top:1px solid var(--line-soft); margin:8px 0;' }),
-      el('p', { style: 'margin:0; font-size:11.5px;' }, ['Prazo: ' + (t.slaDueAt ? formatDate_(t.slaDueAt) : '—')])
+      el('p', { style: 'margin:0; font-size:11.5px;' }, ['Prazo: ' + (t.slaDueAt ? formatDate_(t.slaDueAt) : '—')]),
+      isAnalyst ? buildStatusPriorityMini_(t, refresh) : null
     ]));
 
-    if (isAnalyst) {
-      sideCol.appendChild(buildAtendimentoPanel_(t, function () { openTicketDetail_(t.id, fromView); }));
-      sideCol.appendChild(buildTransferPanel_(t, function () { openTicketDetail_(t.id, fromView); }));
-    }
+    var attachmentsCard = buildAttachmentsList_(detail.attachments);
+    if (attachmentsCard) sideCol.appendChild(attachmentsCard);
 
-    sideCol.appendChild(buildAttachmentsPanel_(t, detail.attachments, function () { openTicketDetail_(t.id, fromView); }));
-
-    if (t.status !== 'encerrado') {
-      sideCol.appendChild(await buildClosePanel_(t, function () { openTicketDetail_(t.id, fromView); }));
-    } else {
+    if (t.status === 'encerrado') {
       sideCol.appendChild(el('div', { class: 'card' }, [
         el('h3', { style: 'margin:0 0 6px; font-size:13px;' }, ['Encerrado']),
         el('p', { style: 'margin:0; font-size:11.5px; color:var(--ink-soft);' }, [(t.closureReason || '') + ' · ' + (t.closedAt ? formatDate_(t.closedAt) : '')])

@@ -25,12 +25,19 @@ para manter — só uma cópia da planilha e um deploy de app da Web.
   anexo de arquivo (guardado no Google Drive).
 - Fila do analista com caixa de entrada geral, aba "Meus atendimentos",
   busca e filtros de atrasados / pendente interação do analista.
-- Status automático: nasce em "Em triagem", vira "Em atendimento" ao ser
-  assumido/atribuído, volta pra triagem se o responsável for removido.
-- Transferência de chamado (analista + fila + motivo) e respostas padrão
-  (genéricas ou por fila), com atalho de inserção com um clique.
-- Encerramento com motivo obrigatório, notificações por e-mail (aberto /
-  respondido / finalizado) e um dashboard bem simples.
+- **Vínculo obrigatório para responder**: o analista consegue abrir e ver
+  os detalhes de qualquer chamado (inclusive os dados do colaborador vindos
+  da ADP), mas só consegue enviar resposta depois de "Assumir para mim" —
+  é isso que tira o chamado da caixa de entrada geral. Uma vez vinculado a
+  alguém, o chamado nunca mais volta pra caixa de entrada: só dá pra
+  transferir para outro analista (botão "Transferir", no topo do chamado).
+- Encerramento pelo botão "Finalizar" (topo do chamado): abre uma
+  confirmação com uma mensagem padrão de encerramento já preenchida,
+  editável antes de enviar.
+- Respostas padrão (genéricas ou por fila), com atalho de inserção com um
+  clique direto no rodapé da resposta.
+- Notificações por e-mail (aberto / respondido / finalizado) e um
+  dashboard bem simples.
 
 ## Passo a passo com imagens (aba `Passos`)
 
