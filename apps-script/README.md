@@ -215,6 +215,9 @@ time ou rodar num piloto pequeno sem precisar de infraestrutura própria.
      continua funcionando normalmente, só não sai o e-mail). Sem essa
      propriedade configurada, o e-mail sai da própria conta que fez o
      deploy, como sempre foi.
+   - `GEMINI_API_KEY` — ver seção **Reescrita natural via Gemini** abaixo.
+     Sem essa propriedade, nada muda: a IA continua respondendo só com o
+     motor local (texto do FAQ tal como está na base).
 9. **Implante como app da Web**: no editor, **Implantar > Nova implantação**
    > tipo "App da Web". Configure:
    - **Executar como**: Eu (sua conta)
@@ -228,12 +231,61 @@ time ou rodar num piloto pequeno sem precisar de infraestrutura própria.
      preciso reafirmar a opção manualmente.
    - Copie a URL gerada e compartilhe com o time.
 
+## Reescrita natural via Gemini (opcional, gratuito)
+
+Por padrão, quando a IA está confiante ela devolve o texto do FAQ quase
+literal, só com uma introdução que reconhece o assunto (ver
+`composeAnswer_` em `AiService.gs`) — funciona bem, mas ainda tem cara de
+"colei uma resposta pronta". Configurando uma chave grátis do **Google AI
+Studio**, a mesma resposta passa por uma reescrita via Gemini antes de
+chegar ao colaborador: mesmo conteúdo (a IA é instruída a nunca sair do
+texto do FAQ), só que com um tom mais natural e fluido de conversa.
+
+Isso é **inteiramente opcional e com fallback automático**: se a chamada
+falhar por qualquer motivo — sem chave configurada, cota do plano
+gratuito estourada, rede fora do ar, resposta vazia ou estranha — a
+resposta determinística do motor local (a mesma de sempre) é usada no
+lugar. O colaborador nunca vê um erro por causa disto; o pior cenário é a
+resposta ficar um pouco menos "polida" do que poderia.
+
+**Como configurar:**
+1. Gere uma chave grátis em [aistudio.google.com/apikey](https://aistudio.google.com/apikey)
+   (conta Google pessoal ou do Workspace — não precisa ser a mesma conta
+   que fez o deploy do Apps Script).
+2. Em **Extensões > Apps Script > Configurações do projeto > Propriedades
+   do script**, adicione `GEMINI_API_KEY` com o valor da chave.
+3. Pronto — não precisa reimplantar o app da Web, a propriedade é lida a
+   cada resposta.
+
+**Propriedades relacionadas (todas opcionais):**
+- `GEMINI_MODEL` — padrão `gemini-flash-lite-latest` (alias que a própria
+  Google atualiza sozinha pro modelo mais novo da linha Flash-Lite — a
+  mais generosa no plano gratuito). Só mude se quiser fixar uma versão
+  específica.
+- `GEMINI_REWRITE_ENABLED` — defina como `false` para desligar a
+  reescrita rapidamente sem apagar a chave (por exemplo, se a cota
+  gratuita estourar e você quiser voltar ao motor local até o dia
+  seguinte).
+
+**Sobre o plano gratuito:** os limites são baixos (na ordem de 10-15
+chamadas por minuto e algumas centenas a mil por dia, variando por
+modelo — confira o valor atual em [ai.google.dev](https://ai.google.dev)).
+Para esticar essa cota, respostas iguais (mesmo par pergunta+FAQ) ficam em
+cache por até 6h (`CacheService`), então perguntas repetidas por
+colaboradores diferentes ("quando cai o pagamento?") não gastam uma
+chamada nova a cada vez. Ainda assim, num piloto com bastante uso
+simultâneo é esperado que a cota se esgote em algum momento — é exatamente
+para isso que o fallback ao motor local existe.
+
 ## Cota e limites a ter em mente
 
 - **MailApp**: 100 e-mails/dia numa conta pessoal Gmail, 1.500/dia num
   Google Workspace normal. Para um piloto pequeno é suficiente.
 - **UrlFetchApp** (chamadas à IA, se a chave estiver configurada): sujeitas
-  às cotas normais de Apps Script (20.000 chamadas/dia num Workspace).
+  às cotas normais de Apps Script (20.000 chamadas/dia num Workspace) E às
+  cotas do plano gratuito do Gemini (bem mais apertadas — ver seção
+  **Reescrita natural via Gemini** acima). Estourar qualquer uma delas só
+  faz a resposta cair de volta pro motor local, sem quebrar nada.
 - **Planilha como banco**: funciona bem até a casa dos milhares de linhas;
   se o volume de chamados crescer muito, é sinal de que já vale migrar para
   o sistema real (`backend/` + `frontend/` deste repositório).

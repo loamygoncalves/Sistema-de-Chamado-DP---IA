@@ -622,11 +622,20 @@ function askAi(question, history) {
   // introdução (ver pickReconhecidos_) — só decoração, nunca tira nada do
   // corpo da resposta.
   var recognizedTerms = highlight ? [] : pickReconhecidos_(analyzed, index, best.faq, 2);
+  var deterministicAnswer = composeAnswer_(best.faq, {
+    confident: confident, isFollowUp: isFollowUp, isCorrection: isCorrection,
+    highlight: highlight, recognizedTerms: recognizedTerms, seed: question
+  });
+  // Camada opcional: reescreve com Gemini (ver GeminiService.gs) se
+  // estiver configurado. Se falhar por qualquer motivo (sem chave, cota
+  // do plano gratuito estourada, rede fora), a resposta determinística
+  // acima continua valendo — nunca quebra o fluxo.
+  var rewritten = rewriteAnswerWithGemini_(question, best.faq, {
+    confident: confident, highlight: highlight, isFollowUp: isFollowUp,
+    previousQuestion: repeticao ? repeticao.previousQuestion : null
+  });
   return {
-    answer: composeAnswer_(best.faq, {
-      confident: confident, isFollowUp: isFollowUp, isCorrection: isCorrection,
-      highlight: highlight, recognizedTerms: recognizedTerms, seed: question
-    }),
+    answer: rewritten || deterministicAnswer,
     decision: confident ? 'auto_answer' : 'suggest_ticket',
     confidence: confidence,
     source: { department: best.faq.Departamento, question: best.faq.Pergunta },
