@@ -261,7 +261,10 @@
         return;
       }
       if (m.role === 'pending') {
-        log.appendChild(el('div', { class: 'msg assistant' }, [el('div', { class: 'bubble' }, ['Pensando...'])]));
+        // Três pontinhos animados em vez de um "Pensando..." parado — dá a
+        // sensação de que algo está de fato acontecendo, não que travou.
+        var dots = el('span', { class: 'typing-dots' }, [el('span', {}, []), el('span', {}, []), el('span', {}, [])]);
+        log.appendChild(el('div', { class: 'msg assistant' }, [el('div', { class: 'bubble' }, [dots])]));
         return;
       }
       var wrap = el('div', { class: 'msg assistant' }, [el('div', { class: 'bubble' }, [m.content])]);
