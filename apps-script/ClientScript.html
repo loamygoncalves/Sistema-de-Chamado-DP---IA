@@ -40,6 +40,50 @@
     });
   }
 
+  /** Placeholders cinza com brilho (ver .skeleton em Styles.html), no
+   * formato aproximado do que vai aparecer ali — usados nos momentos de
+   * espera (lista de chamados, detalhe, dashboard) em vez de um texto
+   * "Carregando..." parado ou, pior, nada na tela. */
+  function skeletonTicketRows_(count) {
+    var wrap = el('div', { class: 'stack' });
+    for (var i = 0; i < count; i++) {
+      wrap.appendChild(el('div', { class: 'card skeleton-row' }, [
+        el('div', { class: 'skeleton', style: 'height:14px; width:' + (50 + (i % 3) * 13) + '%;' }, []),
+        el('div', { class: 'skeleton', style: 'height:11px; width:32%;' }, [])
+      ]));
+    }
+    return wrap;
+  }
+
+  function skeletonTicketDetail_() {
+    var wrap = el('div', {});
+    wrap.appendChild(el('div', { class: 'card' }, [
+      el('div', { class: 'skeleton', style: 'height:11px; width:110px; margin-bottom:8px;' }, []),
+      el('div', { class: 'skeleton', style: 'height:19px; width:55%; margin-bottom:6px;' }, []),
+      el('div', { class: 'skeleton', style: 'height:11px; width:38%;' }, [])
+    ]));
+    wrap.appendChild(el('div', { class: 'grid-2' }, [
+      el('div', { class: 'skeleton', style: 'height:220px; border-radius:var(--radius);' }, []),
+      el('div', { class: 'stack' }, [
+        el('div', { class: 'skeleton', style: 'height:100px; border-radius:var(--radius);' }, []),
+        el('div', { class: 'skeleton', style: 'height:80px; border-radius:var(--radius);' }, [])
+      ])
+    ]));
+    return wrap;
+  }
+
+  function skeletonDashboard_() {
+    var wrap = el('div', {});
+    wrap.appendChild(el('div', { class: 'stat-grid' }, [
+      el('div', { class: 'skeleton skeleton-stat' }, []),
+      el('div', { class: 'skeleton skeleton-stat' }, []),
+      el('div', { class: 'skeleton skeleton-stat' }, [])
+    ]));
+    wrap.appendChild(el('div', { class: 'skeleton', style: 'height:180px; border-radius:var(--radius); margin-bottom:14px;' }, []));
+    wrap.appendChild(el('div', { class: 'skeleton', style: 'height:180px; border-radius:var(--radius);' }, []));
+    return wrap;
+  }
+
   function formatDate_(d) {
     var date = new Date(d);
     if (isNaN(date.getTime())) return String(d);
@@ -559,7 +603,7 @@
      ============================================================ */
   async function renderMyTickets(root) {
     root.appendChild(el('h2', { style: 'margin:0 0 12px; font-size:16px;' }, ['Meus chamados']));
-    var list = el('div', { class: 'stack' }, [el('p', { class: 'loading' }, ['Carregando...'])]);
+    var list = skeletonTicketRows_(4);
     root.appendChild(list);
     var tickets = await call('listTickets', {});
     list.innerHTML = '';
@@ -608,7 +652,7 @@
 
     async function refreshList() {
       list.innerHTML = '';
-      list.appendChild(el('p', { class: 'loading' }, ['Carregando...']));
+      list.appendChild(skeletonTicketRows_(4));
       try {
         var filters = {
           unassigned: av.mode === 'inbox', mine: av.mode === 'mine',
@@ -643,7 +687,7 @@
   async function openTicketDetail_(id, fromView) {
     var root = document.getElementById('view');
     root.innerHTML = '';
-    root.appendChild(el('p', { class: 'loading' }, ['Carregando chamado...']));
+    root.appendChild(skeletonTicketDetail_());
     try {
       var detail = await call('getTicketDetail', id);
       await renderTicketDetail(root, detail, fromView);
@@ -1082,7 +1126,10 @@
 
   async function renderDashboard(root) {
     root.appendChild(el('h2', { style: 'margin:0 0 12px; font-size:16px;' }, ['Dashboard']));
+    var skeleton = skeletonDashboard_();
+    root.appendChild(skeleton);
     var stats = await call('getDashboardStats');
+    skeleton.remove();
     root.appendChild(el('div', { class: 'stat-grid' }, [
       statCard_('Total de chamados', stats.total, CHART_COLORS_.tealDark),
       statCard_('Em aberto', stats.abertos, CHART_COLORS_.orange),

@@ -86,6 +86,23 @@
     40%{transform:translateY(-4px); opacity:1;}
   }
 
+  /* Blocos cinza com um brilho passando por cima, no formato aproximado do
+     que vai aparecer ali (linha de chamado, card de número) — em vez de um
+     "Carregando..." parado (ou, pior, nada na tela, como acontecia no
+     Dashboard) enquanto a lista/estatísticas ainda não chegaram. */
+  .skeleton{
+    border-radius:6px;
+    background:linear-gradient(90deg, var(--line-soft) 25%, var(--line) 37%, var(--line-soft) 63%);
+    background-size:400% 100%;
+    animation:skeleton-shimmer 1.4s ease infinite;
+  }
+  @keyframes skeleton-shimmer{
+    0%{background-position:100% 50%;}
+    100%{background-position:0% 50%;}
+  }
+  .skeleton-row{display:flex; flex-direction:column; gap:8px;}
+  .skeleton-stat{height:74px; border-radius:var(--radius);}
+
   .ticket-row{display:flex; flex-direction:column; gap:8px; cursor:pointer;}
   .ticket-row:hover{border-color:var(--brand);}
   .ticket-row .top-line{display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;}
