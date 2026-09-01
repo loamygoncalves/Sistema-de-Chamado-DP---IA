@@ -63,6 +63,45 @@ function updateObject_(sheet, rowIndex, obj) {
   sheet.getRange(rowIndex, 1, 1, heads.length).setValues([merged]);
 }
 
+/**
+ * Como rowsAsObjects_(), mas com cache curto (CacheService, alguns
+ * segundos) — só para abas de REFERÊNCIA, que mudam raramente mas são
+ * lidas em quase toda ação (Analistas, Colaboradores). Cada ação num
+ * chamado (responder, mudar status, transferir...) já lia essas duas
+ * abas inteiras várias vezes (uma vez dentro de getCurrentUser(), de
+ * novo em colaboradorInfoPorMatricula_(), de novo em
+ * analistasPorEmail_()...) — isso é boa parte do "demora pra trocar de
+ * tela / enviar mensagem" sentido no dia a dia.
+ *
+ * NUNCA usar em abas que o próprio pedido pode ter acabado de escrever
+ * (Chamados, Historico, Anexos) — cache desatualizado ali esconderia a
+ * própria escrita que acabou de acontecer. Também não usar antes de uma
+ * escrita que depende do índice de linha (`_row`) estar exato agora (ver
+ * verifyCpf() em Code.gs, que lê Colaboradores sem cache de propósito, e
+ * limpa o cache logo depois de escrever).
+ */
+function rowsAsObjectsCached_(sheetName, headers, ttlSeconds) {
+  var cache = CacheService.getScriptCache();
+  var cacheKey = 'rows_' + sheetName;
+  var cached = cache.get(cacheKey);
+  if (cached) return JSON.parse(cached);
+  var rows = rowsAsObjects_(sheet_(sheetName, headers));
+  try {
+    cache.put(cacheKey, JSON.stringify(rows), ttlSeconds);
+  } catch (e) {
+    // Aba grande demais pro limite do CacheService (~100KB por valor) —
+    // segue sem cachear desta vez, sem quebrar nada.
+  }
+  return rows;
+}
+
+/** Descarta o cache de uma aba de referência — usar logo depois de
+ * escrever nela (ver verifyCpf()), pra próxima leitura já vir atualizada
+ * em vez de esperar o TTL expirar sozinho. */
+function invalidateRowsCache_(sheetName) {
+  CacheService.getScriptCache().remove('rows_' + sheetName);
+}
+
 function findRowById_(sheet, idColumn, id) {
   var rows = rowsAsObjects_(sheet);
   for (var i = 0; i < rows.length; i++) {

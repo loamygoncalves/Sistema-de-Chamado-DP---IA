@@ -736,8 +736,7 @@
         attachBtn.setAttribute('disabled', 'disabled');
         try {
           var base64 = await readFileAsBase64_(file);
-          await call('uploadAttachment', t.id, file.name, file.type || 'application/octet-stream', base64);
-          onDone();
+          onDone(await call('uploadAttachment', t.id, file.name, file.type || 'application/octet-stream', base64));
         } catch (e) { alert('Falha ao anexar: ' + errorMessage(e)); attachBtn.removeAttribute('disabled'); }
       });
 
@@ -784,8 +783,7 @@
       try {
         var isInternal = isAnalyst && mode === 'interna';
         var newStatus = (isAnalyst && !isInternal) ? statusSelect.value : null;
-        await call('addComment', t.id, body, isInternal, newStatus);
-        onDone();
+        onDone(await call('addComment', t.id, body, isInternal, newStatus));
       } catch (e) {
         alert('Não foi possível enviar: ' + errorMessage(e));
         sendBtn.disabled = false;
@@ -857,7 +855,7 @@
   function buildStatusPriorityMini_(t, onDone) {
     var statusSel = el('select', {
       style: 'font-size:11.5px;',
-      onchange: async function (ev) { try { await call('changeStatus', t.id, ev.target.value); onDone(); } catch (e) { alert(errorMessage(e)); } }
+      onchange: async function (ev) { try { onDone(await call('changeStatus', t.id, ev.target.value)); } catch (e) { alert(errorMessage(e)); } }
     }, Object.keys(STATUS_LABEL).filter(function (s) { return s !== 'encerrado'; }).map(function (s) {
       var opt = el('option', { value: s }, [STATUS_LABEL[s]]);
       if (s === t.status) opt.setAttribute('selected', 'selected');
@@ -865,7 +863,7 @@
     }));
     var prioritySel = el('select', {
       style: 'font-size:11.5px;',
-      onchange: async function (ev) { try { await call('changePriority', t.id, ev.target.value); onDone(); } catch (e) { alert(errorMessage(e)); } }
+      onchange: async function (ev) { try { onDone(await call('changePriority', t.id, ev.target.value)); } catch (e) { alert(errorMessage(e)); } }
     }, Object.keys(PRIORITY_LABEL).map(function (p) {
       var opt = el('option', { value: p }, [PRIORITY_LABEL[p]]);
       if (p === t.priority) opt.setAttribute('selected', 'selected');
@@ -895,8 +893,8 @@
     deptSelect.addEventListener('change', checkChanged);
     transferBtn.addEventListener('click', async function () {
       try {
-        await call('transferTicket', t.id, analystSelect.value || null, deptSelect.value, reasonInput.value.trim() || null);
-        closeModal(); onDone();
+        var d = await call('transferTicket', t.id, analystSelect.value || null, deptSelect.value, reasonInput.value.trim() || null);
+        closeModal(); onDone(d);
       } catch (e) { alert(errorMessage(e)); }
     });
 
@@ -959,8 +957,10 @@
       class: 'btn primary', style: 'width:100%;',
       onclick: async function () {
         closeBtn.disabled = true;
-        try { await call('closeTicket', t.id, current.value, messageArea.value.trim()); closeModal(); onDone(); }
-        catch (e) { alert('Não foi possível encerrar: ' + errorMessage(e)); closeBtn.disabled = false; }
+        try {
+          var d = await call('closeTicket', t.id, current.value, messageArea.value.trim());
+          closeModal(); onDone(d);
+        } catch (e) { alert('Não foi possível encerrar: ' + errorMessage(e)); closeBtn.disabled = false; }
       }
     }, ['Finalizar']);
     box.appendChild(closeBtn);
@@ -971,7 +971,17 @@
     root.innerHTML = '';
     var t = detail.ticket;
     var isAnalyst = state.user.role === 'analyst';
-    var refresh = function () { openTicketDetail_(t.id, fromView); };
+    // Toda ação (responder, mudar status, transferir, etc.) já devolve o
+    // chamado inteiro e atualizado (ver addComment/transferTicket/etc. em
+    // Code.gs) — passando esse resultado pra cá, evita buscar tudo de novo
+    // do zero numa segunda chamada só pra re-renderizar a mesma tela (era
+    // uma das causas da lentidão: cada ação virava DUAS leituras completas
+    // da planilha em vez de uma). Sem argumento, cai no caminho antigo
+    // (busca do zero) — usado só onde ainda não há um resultado pronto.
+    var refresh = function (freshDetail) {
+      if (freshDetail) { renderTicketDetail(root, freshDetail, fromView); }
+      else { openTicketDetail_(t.id, fromView); }
+    };
     root.appendChild(el('button', { class: 'btn ghost', style: 'margin-bottom:12px;', onclick: function () { setView(fromView); } }, ['← Voltar']));
 
     var actionButtons = [];
@@ -1028,7 +1038,7 @@
         el('p', { style: 'margin:0 0 10px; font-size:13px; color:var(--ink-soft);' },
           ['Este chamado ainda está na caixa de entrada geral — assuma para poder responder.']),
         el('button', {
-          class: 'btn primary', onclick: async function () { try { await call('assumeTicket', t.id); refresh(); } catch (e) { alert(errorMessage(e)); } }
+          class: 'btn primary', onclick: async function () { try { refresh(await call('assumeTicket', t.id)); } catch (e) { alert(errorMessage(e)); } }
         }, ['Assumir para mim'])
       ]));
     } else {

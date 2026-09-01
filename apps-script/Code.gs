@@ -114,7 +114,7 @@ function handleAdminRoute_(action, e) {
     return ContentService.createTextOutput('Rota restrita ao dono do aplicativo.');
   }
   var ehDono = chamador.trim().toLowerCase() === dono.trim().toLowerCase();
-  var ehAnalista = rowsAsObjects_(sheet_(SHEETS.ANALISTAS, HEADERS.Analistas)).some(function (a) {
+  var ehAnalista = rowsAsObjectsCached_(SHEETS.ANALISTAS, HEADERS.Analistas, 30).some(function (a) {
     return String(a.Email).trim().toLowerCase() === chamador.trim().toLowerCase() && a.Ativo;
   });
   if (!ehDono && !ehAnalista) {
@@ -217,7 +217,10 @@ function normalizeCpf_(value) {
  * tratar como colaborador não verificado (cai na tela de CPF). */
 function getCurrentUser() {
   var email = (Session.getActiveUser().getEmail() || '').trim();
-  var analistas = rowsAsObjects_(sheet_(SHEETS.ANALISTAS, HEADERS.Analistas));
+  // getCurrentUser() roda em praticamente toda ação do sistema — cache
+  // curto aqui (Analistas/Colaboradores mudam raramente) é o que mais
+  // reduz a quantidade de vezes que a planilha inteira é lida por sessão.
+  var analistas = rowsAsObjectsCached_(SHEETS.ANALISTAS, HEADERS.Analistas, 30);
   var analyst = analistas.filter(function (a) {
     return String(a.Email).trim().toLowerCase() === email.toLowerCase() && a.Ativo;
   })[0];
@@ -225,7 +228,7 @@ function getCurrentUser() {
     return { email: email, name: analyst.Nome, role: 'analyst', verified: true, matricula: '', filial: '', dataAdmissao: '' };
   }
 
-  var colaboradores = rowsAsObjects_(sheet_(SHEETS.COLABORADORES, HEADERS.Colaboradores));
+  var colaboradores = rowsAsObjectsCached_(SHEETS.COLABORADORES, HEADERS.Colaboradores, 30);
   var porEmail = email ? colaboradores.filter(function (c) {
     return String(c.Email).trim().toLowerCase() === email.toLowerCase();
   })[0] : null;
@@ -309,6 +312,11 @@ function verifyCpf(cpf) {
   }
   if (!donoAtual) {
     updateObject_(sheet, colaborador._row, { UserKeyVerificado: userKeyAtual, DataVerificacao: new Date() });
+    // getCurrentUser() lê Colaboradores com cache curto (ver
+    // rowsAsObjectsCached_) — sem isto, quem acabou de confirmar podia
+    // cair de novo na tela de CPF por até o TTL do cache, se recarregasse
+    // a página logo em seguida.
+    invalidateRowsCache_(SHEETS.COLABORADORES);
   }
 
   saveVerifiedCpf_(normalizado);
@@ -370,7 +378,7 @@ function getDepartments() {
 }
 
 function getAnalysts() {
-  return rowsAsObjects_(sheet_(SHEETS.ANALISTAS, HEADERS.Analistas))
+  return rowsAsObjectsCached_(SHEETS.ANALISTAS, HEADERS.Analistas, 30)
     .filter(function (a) { return a.Ativo; })
     .map(function (a) { return { name: a.Nome, email: a.Email }; });
 }
@@ -427,7 +435,7 @@ function toIso_(value) {
  * listTickets(), pra não reler a aba Analistas a cada linha. */
 function analistasPorEmail_() {
   var mapa = {};
-  rowsAsObjects_(sheet_(SHEETS.ANALISTAS, HEADERS.Analistas)).forEach(function (a) {
+  rowsAsObjectsCached_(SHEETS.ANALISTAS, HEADERS.Analistas, 30).forEach(function (a) {
     mapa[String(a.Email).trim().toLowerCase()] = a.Nome;
   });
   return mapa;
@@ -525,7 +533,7 @@ function getTicketDetail(ticketId) {
 function colaboradorInfoPorMatricula_(matricula) {
   var mat = String(matricula || '').trim();
   if (!mat) return null;
-  var colaborador = rowsAsObjects_(sheet_(SHEETS.COLABORADORES, HEADERS.Colaboradores))
+  var colaborador = rowsAsObjectsCached_(SHEETS.COLABORADORES, HEADERS.Colaboradores, 30)
     .filter(function (c) { return String(c.Matricula).trim() === mat; })[0];
   if (!colaborador) return null;
   return {
@@ -725,7 +733,10 @@ function getOrCreateAttachmentsFolder_() {
   return folder;
 }
 
-/** `base64Data` vem do FileReader do navegador (sem o prefixo data:...;base64,). */
+/** `base64Data` vem do FileReader do navegador (sem o prefixo data:...;base64,).
+ * Devolve o chamado inteiro (igual addComment/transferTicket/etc.), não só
+ * a lista de anexos — o cliente usa isso pra atualizar a tela sem precisar
+ * de uma segunda chamada a getTicketDetail() só pra re-renderizar. */
 function uploadAttachment(ticketId, filename, mimeType, base64Data) {
   var user = getCurrentUser();
   var blob = Utilities.newBlob(Utilities.base64Decode(base64Data), mimeType, filename);
@@ -734,7 +745,7 @@ function uploadAttachment(ticketId, filename, mimeType, base64Data) {
     ID: Utilities.getUuid(), ChamadoID: ticketId, NomeArquivo: filename,
     URL: file.getUrl(), EnviadoPor: user.email, DataHora: new Date()
   });
-  return listAttachments(ticketId);
+  return getTicketDetail(ticketId);
 }
 
 function listAttachments(ticketId) {
