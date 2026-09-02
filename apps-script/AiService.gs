@@ -212,30 +212,41 @@ function detectIntent_(question, history) {
   return 'pergunta';
 }
 
+/** Primeiro nome, pra soar natural ("Oi, Ana!" em vez de "Oi, Ana Paula
+ * Silva Souza!"). Só usado quando a identidade já foi confirmada (ver
+ * askAi() — nunca com o nome genérico de quem ainda não verificou). */
+function primeiroNome_(nomeCompleto) {
+  var partes = String(nomeCompleto || '').trim().split(/\s+/);
+  return partes[0] || '';
+}
+
 /** Resposta de conversa (não consulta a base, não oferece chamado, não
- * mostra confiança) — é só a IA se comportando como gente. */
-function smallTalkAnswer_(intent, seed) {
+ * mostra confiança) — é só a IA se comportando como gente. `nome` (o
+ * primeiro nome do colaborador, quando a identidade está confirmada) é
+ * opcional — sem ele, cai no "beeper" genérico de sempre. */
+function smallTalkAnswer_(intent, seed, nome) {
+  var quemE = nome || 'beeper';
   if (intent === 'gratidao') {
     return pickVariant_([
-      'Que bom que ajudou, beeper! 😊 Fico à disposição — se surgir qualquer outra dúvida de DP, é só me chamar.',
+      'Que bom que ajudou, ' + quemE + '! 😊 Fico à disposição — se surgir qualquer outra dúvida de DP, é só me chamar.',
       'Fico feliz em ter ajudado! Se precisar de mais alguma coisa sobre DP, estou por aqui.',
       'Perfeito, era isso mesmo então! Qualquer outra dúvida, é só perguntar.'
     ], seed);
   }
   if (intent === 'cortesia') {
     return pickVariant_([
-      'Tudo ótimo por aqui, obrigada por perguntar! 😊 Em que posso te ajudar hoje, beeper?',
+      'Tudo ótimo por aqui, obrigada por perguntar! 😊 Em que posso te ajudar hoje, ' + quemE + '?',
       'Tudo bem sim, obrigada! E com você? Me diz o que você precisa que eu procuro pra você.'
     ], seed);
   }
   if (intent === 'saudacao') {
     return pickVariant_([
-      'Oi, beeper! Sou a assistente do DP da Beep. Pode perguntar sobre folha de pagamento, férias, benefícios, ponto, documentos — o que você precisar.',
-      'Olá! Posso te ajudar com dúvidas de DP: pagamento, férias, benefícios, ponto, atestados e por aí vai. O que você precisa?'
+      'Oi, ' + quemE + '! Sou a assistente do DP da Beep. Pode perguntar sobre folha de pagamento, férias, benefícios, ponto, documentos — o que você precisar.',
+      'Olá' + (nome ? ', ' + nome : '') + '! Posso te ajudar com dúvidas de DP: pagamento, férias, benefícios, ponto, atestados e por aí vai. O que você precisa?'
     ], seed);
   }
   return pickVariant_([
-    'Até mais! Qualquer dúvida de DP, é só voltar aqui. 👋',
+    'Até mais' + (nome ? ', ' + nome : '') + '! Qualquer dúvida de DP, é só voltar aqui. 👋',
     'Precisando, estou por aqui. Até logo!'
   ], seed);
 }
@@ -255,9 +266,9 @@ function reacaoSurpresaAnswer_(seed) {
  * sem contar a dúvida — convida a tentar com a IA primeiro (que resolve
  * na hora, quando resolve), mas nunca fecha a porta: o botão já abre o
  * chamado de verdade, sem pedir a mesma coisa duas vezes. */
-function ofertaAtendimentoAnswer_(seed) {
+function ofertaAtendimentoAnswer_(seed, nome) {
   return pickVariant_([
-    'Claro, beeper! Antes de acionar o time de DP, me conta qual é sua dúvida — boas chances de eu já resolver na hora. Mas se preferir falar direto com o time, é só clicar abaixo que eu já abro o chamado.',
+    'Claro, ' + (nome || 'beeper') + '! Antes de acionar o time de DP, me conta qual é sua dúvida — boas chances de eu já resolver na hora. Mas se preferir falar direto com o time, é só clicar abaixo que eu já abro o chamado.',
     'Sem problema! Só que, antes, vale tentar comigo — às vezes eu já respondo na hora e você nem precisa esperar um analista. Me conta o que está acontecendo, ou clique abaixo se preferir ir direto pro chamado.'
   ], seed);
 }
@@ -495,6 +506,11 @@ function askAi(question, history) {
   }
 
   var recentHistory = normalizeHistory_(history);
+  // Nome de quem está perguntando, pra tratar pelo nome em vez do "beeper"
+  // genérico — só quando a identidade já foi confirmada (getCurrentUser()
+  // com verified=true; ver Code.gs), nunca com um nome não confiável.
+  var caller = getCurrentUser();
+  var employeeFirstName = caller.verified ? primeiroNome_(caller.name) : '';
   var faqs = rowsAsObjects_(sheet_(SHEETS.FAQS, HEADERS.FAQs)).filter(function (f) {
     return f.Pergunta && f.Resposta;
   });
@@ -511,14 +527,14 @@ function askAi(question, history) {
   var intent = detectIntent_(question, recentHistory);
   if (intent === 'pedido_atendente') {
     return {
-      answer: ofertaAtendimentoAnswer_(question),
+      answer: ofertaAtendimentoAnswer_(question, employeeFirstName),
       decision: 'conversa', confidence: 1, source: null, steps: [],
       options: [{ label: 'Quero abrir chamado mesmo assim', question: CONFIRMA_ABRIR_CHAMADO_ }]
     };
   }
   if (intent === 'gratidao' || intent === 'saudacao' || intent === 'despedida' || intent === 'cortesia') {
     return {
-      answer: smallTalkAnswer_(intent, question),
+      answer: smallTalkAnswer_(intent, question, employeeFirstName),
       decision: 'conversa', confidence: 1, source: null, options: [], steps: []
     };
   }
@@ -656,6 +672,13 @@ function askAi(question, history) {
   // do plano gratuito estourada, rede fora), a resposta determinística
   // acima continua valendo — nunca quebra o fluxo.
   var geminiDebug = {};
+  // De propósito, NÃO manda o nome pro Gemini aqui: a resposta reescrita
+  // fica em cache (ver GeminiService.gs) e é servida pra QUALQUER
+  // colaborador que fizer a mesma pergunta dentro do TTL — se o nome
+  // entrasse no texto cacheado, um colega veria o nome de outro colega
+  // numa resposta que não é dele. O tratamento pelo nome fica só nas
+  // respostas de conversa (smallTalkAnswer_ etc.), que nunca são
+  // compartilhadas entre colaboradores.
   var rewritten = rewriteAnswerWithGemini_(question, best.faq, {
     confident: confident, highlight: highlight, isFollowUp: isFollowUp,
     previousQuestion: repeticao ? repeticao.previousQuestion : null, debug: geminiDebug

@@ -37,9 +37,16 @@ function geminiConfig_() {
   var props = PropertiesService.getScriptProperties();
   var apiKey = props.getProperty('GEMINI_API_KEY') || '';
   var enabledFlag = props.getProperty('GEMINI_REWRITE_ENABLED');
+  // Temperatura: quanto o texto varia de uma resposta pra outra. Baixa
+  // (0.3) é mais previsível/consistente; mais alta (0.6, o padrão daqui)
+  // soa mais natural, com um pouco menos de uniformidade entre respostas
+  // parecidas. Não afeta a regra de nunca inventar informação — essa
+  // vem do prompt (GEMINI_SYSTEM_PROMPT_), não da temperatura.
+  var temperaturaConfigurada = parseFloat(props.getProperty('GEMINI_TEMPERATURE'));
   return {
     apiKey: apiKey,
     model: props.getProperty('GEMINI_MODEL') || 'gemini-flash-lite-latest',
+    temperature: isNaN(temperaturaConfigurada) ? 0.6 : temperaturaConfigurada,
     enabled: !!apiKey && enabledFlag !== 'false'
   };
 }
@@ -102,7 +109,7 @@ function rewriteAnswerWithGemini_(question, faq, opts) {
   var payload = {
     systemInstruction: { parts: [{ text: GEMINI_SYSTEM_PROMPT_ }] },
     contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
-    generationConfig: { temperature: 0.3, maxOutputTokens: 400 }
+    generationConfig: { temperature: config.temperature, maxOutputTokens: 400 }
   };
 
   try {
