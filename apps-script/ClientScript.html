@@ -504,74 +504,63 @@
     // repetir o problema de abrir chamado com um nome de teste antigo
     // (salvo de uma sessão anterior) em vez de quem realmente está usando.
     state.ticketForm = {
-      forMessage: m, step: 'form', name: state.user.name, matricula: state.user.matricula,
+      forMessage: m, name: state.user.name, matricula: state.user.matricula,
       department: m.source ? m.source.department : (state.departments[0] ? state.departments[0].name : ''),
-      category: '', description: '', subject: '', file: null, loading: false
+      subject: '', description: '', file: null, loading: false
     };
     drawChatLog();
   }
 
-  function deriveTicketSubject_(m) {
-    if (m.source) return m.source.question;
-    var q = m.query.trim();
-    if (q.length > 70) q = q.slice(0, 67).replace(/\s+\S*$/, '') + '...';
-    return 'Dúvida sobre: ' + q.charAt(0).toUpperCase() + q.slice(1);
-  }
-
+  /** Uma etapa só: Assunto e Descrição juntos (antes eram duas telas
+   * separadas, com a descrição pré-preenchida pelo resumo da conversa com
+   * a IA). O colaborador escreve os dois do zero — assunto vira o título
+   * do chamado (era, por engano, preenchido sozinho com a pergunta feita
+   * à IA), e a descrição fica em branco com uma orientação de detalhar
+   * bem, em vez de vir com o contexto do chat já pronto. */
   function renderTicketForm(m) {
     var tf = state.ticketForm;
     var box = el('div', { style: 'margin-top:10px; border:1px solid var(--line); border-radius:10px; padding:12px; background:var(--paper);' });
 
-    if (tf.step === 'form') {
-      var fileInput = el('input', { type: 'file' });
-      var categoryInput = el('input', {
-        type: 'text', value: tf.category, placeholder: 'Do que se trata o seu chamado?',
-        oninput: function (ev) { tf.category = ev.target.value; categoryError.textContent = ''; }
-      });
-      var categoryError = el('span', { style: 'font-size:11px; color:var(--critical-ink);' }, []);
-      box.appendChild(el('p', { style: 'margin:0 0 8px; font-weight:700; font-size:13px;' }, ['Abrir chamado para o DP']));
-      box.appendChild(el('p', { style: 'margin:0 0 10px; font-size:12px; color:var(--ink-soft);' },
-        ['Aberto por ', el('b', { style: 'color:var(--ink);' }, [tf.name]), ' · matrícula ' + tf.matricula]));
-      box.appendChild(el('label', { class: 'field' }, [el('span', {}, ['Categoria']),
-        el('select', { onchange: function (ev) { tf.department = ev.target.value; } },
-          state.departments.map(function (d) {
-            var opt = el('option', { value: d.name }, [d.name]);
-            if (d.name === tf.department) opt.setAttribute('selected', 'selected');
-            return opt;
-          }))]));
-      box.appendChild(el('label', { class: 'field' }, [el('span', {}, ['Assunto *']), categoryInput, categoryError]));
-      box.appendChild(el('label', { class: 'field' }, [el('span', {}, ['Anexar arquivo (opcional)']), fileInput]));
-      box.appendChild(el('div', { style: 'display:flex; justify-content:flex-end; gap:8px;' }, [
-        el('button', { class: 'btn', onclick: function () { state.ticketForm = null; drawChatLog(); } }, ['Cancelar']),
-        el('button', { class: 'btn primary', onclick: async function () {
-          if (!tf.category.trim()) { categoryError.textContent = 'Preencha o assunto.'; return; }
+    var fileInput = el('input', { type: 'file' });
+    var subjectInput = el('input', {
+      type: 'text', value: tf.subject, placeholder: 'Do que se trata o seu chamado?',
+      oninput: function (ev) { tf.subject = ev.target.value; subjectError.textContent = ''; }
+    });
+    var subjectError = el('span', { style: 'font-size:11px; color:var(--critical-ink);' }, []);
+    var descArea = el('textarea', {
+      rows: 6,
+      placeholder: 'Detalhe ao máximo o que você precisa que o analista entenda. Se for útil, anexe um arquivo abaixo.',
+      oninput: function (ev) { tf.description = ev.target.value; descError.textContent = ''; }
+    });
+    descArea.value = tf.description;
+    var descError = el('span', { style: 'font-size:11px; color:var(--critical-ink);' }, []);
+
+    box.appendChild(el('p', { style: 'margin:0 0 8px; font-weight:700; font-size:13px;' }, ['Abrir chamado para o DP']));
+    box.appendChild(el('p', { style: 'margin:0 0 10px; font-size:12px; color:var(--ink-soft);' },
+      ['Aberto por ', el('b', { style: 'color:var(--ink);' }, [tf.name]), ' · matrícula ' + tf.matricula]));
+    box.appendChild(el('label', { class: 'field' }, [el('span', {}, ['Categoria']),
+      el('select', { onchange: function (ev) { tf.department = ev.target.value; } },
+        state.departments.map(function (d) {
+          var opt = el('option', { value: d.name }, [d.name]);
+          if (d.name === tf.department) opt.setAttribute('selected', 'selected');
+          return opt;
+        }))]));
+    box.appendChild(el('label', { class: 'field' }, [el('span', {}, ['Assunto *']), subjectInput, subjectError]));
+    box.appendChild(el('label', { class: 'field' }, [el('span', {}, ['Descrição para o analista *']), descArea, descError]));
+    box.appendChild(el('label', { class: 'field' }, [el('span', {}, ['Anexar arquivo (opcional)']), fileInput]));
+    box.appendChild(el('div', { style: 'display:flex; justify-content:flex-end; gap:8px;' }, [
+      el('button', { class: 'btn', disabled: tf.loading ? 'disabled' : null, onclick: function () { state.ticketForm = null; drawChatLog(); } }, ['Cancelar']),
+      el('button', {
+        class: 'btn primary', disabled: tf.loading ? 'disabled' : null, onclick: async function () {
+          var ok = true;
+          if (!tf.subject.trim()) { subjectError.textContent = 'Preencha o assunto.'; ok = false; }
+          if (!tf.description.trim()) { descError.textContent = 'Detalhe sua solicitação.'; ok = false; }
+          if (!ok) return;
           tf.file = fileInput.files[0] || null;
-          tf.loading = true; drawChatLog();
-          try {
-            var history = conversationHistory_(m);
-            tf.description = await call('draftTicketContext', m.query, m.source ? m.source.question : null, history);
-            tf.subject = deriveTicketSubject_(m);
-            tf.step = 'review';
-          } catch (e) {
-            alert('Não foi possível preparar o resumo: ' + errorMessage(e));
-          }
-          tf.loading = false;
-          drawChatLog();
-        } }, ['Continuar'])
-      ]));
-      if (tf.loading) box.appendChild(el('p', { class: 'loading' }, ['Preparando o resumo para o analista...']));
-    } else {
-      // Sem campo de "Assunto" aqui de propósito — o colaborador já indicou o
-      // assunto na pergunta feita à IA; pedir de novo seria repetição.
-      var descArea = el('textarea', { rows: 6, oninput: function (ev) { tf.description = ev.target.value; } });
-      descArea.value = tf.description;
-      box.appendChild(el('p', { style: 'margin:0 0 8px; font-weight:700; font-size:13px;' }, ['Confirme ou ajuste antes de abrir']));
-      box.appendChild(el('label', { class: 'field' }, [el('span', {}, ['Descrição para o analista']), descArea]));
-      box.appendChild(el('div', { style: 'display:flex; justify-content:flex-end; gap:8px;' }, [
-        el('button', { class: 'btn', disabled: tf.loading ? 'disabled' : null, onclick: function () { tf.step = 'form'; drawChatLog(); } }, ['Voltar']),
-        el('button', { class: 'btn primary', disabled: tf.loading ? 'disabled' : null, onclick: function () { confirmTicketOpening(m); } }, [tf.loading ? 'Abrindo...' : 'Está de acordo — abrir chamado'])
-      ]));
-    }
+          await confirmTicketOpening(m);
+        }
+      }, [tf.loading ? 'Abrindo...' : 'Abrir chamado'])
+    ]));
     return box;
   }
 
@@ -580,7 +569,7 @@
     tf.loading = true; drawChatLog();
     try {
       var payload = {
-        name: tf.name, matricula: tf.matricula, department: tf.department, category: tf.category,
+        name: tf.name, matricula: tf.matricula, department: tf.department,
         subject: tf.subject, description: tf.description,
         source: (m.decision === 'auto_ticket' ? 'ia_automatico' : 'ia_sugerido')
       };

@@ -701,38 +701,3 @@ function markAiInteractionUtil(logId, useful) {
   if (!row) return;
   updateObject_(sheet, row._row, { Util: !!useful });
 }
-
-/**
- * Resumo do caso para o analista, montado a partir da conversa real —
- * sem transcrever tudo. Escrito por regra (não por LLM): identifica o
- * assunto, lista o que o colaborador perguntou e aponta o que a base já
- * cobriu, para o analista saber de onde partir.
- */
-function draftTicketContext(question, sourceFaqQuestion, history) {
-  var recentHistory = normalizeHistory_(history);
-  var perguntas = previousUserQuestions_(recentHistory, 5);
-  var parts = [];
-
-  parts.push('Resumo automático da conversa com a IA (a IA não conseguiu resolver o caso).');
-  parts.push('Dúvida principal do colaborador:\n"' + String(question).trim() + '"');
-
-  if (perguntas.length > 0) {
-    var anteriores = perguntas.filter(function (p) { return p.trim() !== String(question).trim(); });
-    if (anteriores.length > 0) {
-      parts.push('Outras perguntas feitas na mesma conversa:\n' +
-        anteriores.map(function (p) { return '• ' + p.trim(); }).join('\n'));
-    }
-  }
-
-  if (sourceFaqQuestion) {
-    parts.push('A IA identificou o assunto como relacionado a "' + sourceFaqQuestion + '" e apresentou a ' +
-      'orientação padrão desse tema, mas o colaborador indicou que isso não resolveu o caso dele — ' +
-      'provavelmente há uma particularidade (valor, data, situação específica) que a resposta genérica não cobre.');
-  } else {
-    parts.push('A base de conhecimento não cobre esse assunto — pode ser um caso novo, ainda não documentado ' +
-      'nas políticas e FAQs. Vale avaliar se cabe virar um novo item da base depois de resolvido.');
-  }
-
-  parts.push('Sugestão: confirmar com o colaborador os dados específicos do caso antes de concluir a análise.');
-  return parts.join('\n\n');
-}
