@@ -125,12 +125,15 @@
     var due = new Date(t.slaDueAt).getTime();
     var total = due - opened;
     var pct = sState === 'critical' ? 100 : Math.max(0, Math.min(100, total > 0 ? Math.round(((Date.now() - opened) / total) * 100) : 100));
-    return el('div', { style: 'display:flex; align-items:center; gap:8px;' }, [
+    // Largura fixa (não flex:1) de propósito: isto fica encostado no
+    // canto direito do card, então não deve esticar pra ocupar o espaço
+    // todo — só o badge + uma barrinha curta.
+    return el('div', { style: 'display:flex; align-items:center; gap:6px; flex-shrink:0;' }, [
       el('span', {
         style: 'font-size:11px; font-weight:700; padding:2px 8px; border-radius:999px; min-width:38px; text-align:center;' +
           'background:' + SLA_STATE_TINT_[sState] + '; color:' + SLA_STATE_INK_[sState] + ';'
       }, [pct + '%']),
-      el('div', { style: 'flex:1; height:6px; border-radius:999px; background:var(--line); overflow:hidden;' }, [
+      el('div', { style: 'width:56px; height:6px; border-radius:999px; background:var(--line); overflow:hidden;' }, [
         el('div', { style: 'height:100%; width:' + pct + '%; background:' + SLA_STATE_COLOR_[sState] + ';' }, [])
       ])
     ]);
@@ -192,7 +195,14 @@
           ? el('span', {}, ['Analista: ', el('b', { style: 'color:var(--brand-ink);' }, [t.assignedToName || t.assignedTo])])
           : el('span', { style: 'font-style:italic;' }, ['sem analista vinculado'])
       ]),
-      progress ? el('div', { style: 'margin-top:4px;' }, [progress]) : null
+      // Deadline (à esquerda) + SLA %/barrinha (à direita, sempre no
+      // canto) — os dois só existem juntos: progress vem null nos
+      // mesmos casos em que não faz sentido mostrar prazo (sem
+      // slaDueAt, ou chamado resolvido/encerrado).
+      progress ? el('div', { class: 'ticket-row-footer' }, [
+        formatDeadline_(t.slaDueAt, {}),
+        progress
+      ]) : null
     ]);
   }
 
