@@ -334,27 +334,33 @@
         return;
       }
 
-      var confPct = Math.round(m.confidence * 100);
-      var decisionLabel = m.decision === 'auto_answer' ? 'Resposta automática'
-        : m.decision === 'suggest_ticket' ? 'Sugestão de chamado'
-        : m.decision === 'clarify' ? 'Preciso entender melhor'
-        : 'Confirmação de chamado necessária';
-      var decisionCls = m.decision === 'auto_answer' ? 'success'
-        : (m.decision === 'suggest_ticket' || m.decision === 'clarify') ? 'warning'
-        : 'critical';
-      wrap.appendChild(el('div', { style: 'margin-top:6px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;' }, [
-        el('span', { class: 'pill ' + decisionCls }, [decisionLabel]),
-        el('span', { class: 'mono', style: 'font-size:11.5px; color:var(--ink-soft);' }, [confPct + '% de confiança'])
-      ]));
+      // Pill de decisão ("Sugestão de chamado"), % de confiança e "Fonte:"
+      // (que expõe o texto cru da Pergunta do FAQ — incluindo as
+      // palavras-chave que o DP separa por ";" pra ajudar a busca, nunca
+      // pensadas pra aparecer pro colaborador) só fazem sentido pra quem
+      // está calibrando a base — ficam visíveis só pro analista.
+      if (state.user.role === 'analyst') {
+        var confPct = Math.round(m.confidence * 100);
+        var decisionLabel = m.decision === 'auto_answer' ? 'Resposta automática'
+          : m.decision === 'suggest_ticket' ? 'Sugestão de chamado'
+          : m.decision === 'clarify' ? 'Preciso entender melhor'
+          : 'Confirmação de chamado necessária';
+        var decisionCls = m.decision === 'auto_answer' ? 'success'
+          : (m.decision === 'suggest_ticket' || m.decision === 'clarify') ? 'warning'
+          : 'critical';
+        wrap.appendChild(el('div', { style: 'margin-top:6px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;' }, [
+          el('span', { class: 'pill ' + decisionCls }, [decisionLabel]),
+          el('span', { class: 'mono', style: 'font-size:11.5px; color:var(--ink-soft);' }, [confPct + '% de confiança'])
+        ]));
+        if (m.source && m.decision !== 'clarify') {
+          wrap.appendChild(el('p', { style: 'font-size:11.5px; color:var(--ink-soft); margin:6px 0 0;' }, ['Fonte: ' + m.source.department + ' — "' + m.source.question + '"']));
+        }
+      }
       // Passo a passo ilustrado: o texto de cada etapa entra na hora e a
       // tela correspondente vai preenchendo em seguida, para a resposta
       // nunca ficar esperando imagem carregar.
       if (m.steps && m.steps.length) {
         wrap.appendChild(renderSteps_(m.steps));
-      }
-
-      if (m.source && m.decision !== 'clarify') {
-        wrap.appendChild(el('p', { style: 'font-size:11.5px; color:var(--ink-soft); margin:6px 0 0;' }, ['Fonte: ' + m.source.department + ' — "' + m.source.question + '"']));
       }
 
       // Desambiguação: em vez de arriscar a resposta errada, a IA mostra os
