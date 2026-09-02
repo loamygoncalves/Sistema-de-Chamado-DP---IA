@@ -110,20 +110,89 @@
     return Math.round(diffMs / 3600000) + 'h restantes';
   }
 
+  var SLA_STATE_COLOR_ = { success: 'var(--success)', warning: 'var(--warning)', critical: 'var(--critical)' };
+  var SLA_STATE_TINT_ = { success: 'var(--success-tint)', warning: 'var(--warning-tint)', critical: 'var(--critical-tint)' };
+  var SLA_STATE_INK_ = { success: 'var(--success-ink)', warning: 'var(--warning-ink)', critical: 'var(--critical-ink)' };
+
+  /** % do prazo já consumido (aberto até agora, sobre aberto até o
+   * vencimento) + barrinha de preenchimento colorida — null quando não
+   * tem prazo ou o chamado já foi resolvido/encerrado (SLA parou de
+   * correr, não faz sentido mostrar barra). */
+  function slaProgress_(t) {
+    var sState = slaState_(t);
+    if (!t.slaDueAt || sState === 'neutral') return null;
+    var opened = new Date(t.openedAt).getTime();
+    var due = new Date(t.slaDueAt).getTime();
+    var total = due - opened;
+    var pct = sState === 'critical' ? 100 : Math.max(0, Math.min(100, total > 0 ? Math.round(((Date.now() - opened) / total) * 100) : 100));
+    return el('div', { style: 'display:flex; align-items:center; gap:8px;' }, [
+      el('span', {
+        style: 'font-size:11px; font-weight:700; padding:2px 8px; border-radius:999px; min-width:38px; text-align:center;' +
+          'background:' + SLA_STATE_TINT_[sState] + '; color:' + SLA_STATE_INK_[sState] + ';'
+      }, [pct + '%']),
+      el('div', { style: 'flex:1; height:6px; border-radius:999px; background:var(--line); overflow:hidden;' }, [
+        el('div', { style: 'height:100%; width:' + pct + '%; background:' + SLA_STATE_COLOR_[sState] + ';' }, [])
+      ])
+    ]);
+  }
+
+  /** Data por extenso + frase relativa de urgência ("Irá expirar em Xh e
+   * Ymin" / "Expirou há Xh e Ymin") — só quando faz sentido mostrar
+   * urgência: perto o bastante do prazo (até 24h) ou já vencido. Chamado
+   * resolvido/encerrado mostra só a data, sem a frase (o prazo parou de
+   * importar). */
+  function formatDeadline_(iso, opts) {
+    opts = opts || {};
+    if (!iso) return el('span', { style: 'font-size:12.5px; color:var(--ink-soft);' }, ['—']);
+    var diffMin = Math.round((new Date(iso) - new Date()) / 60000);
+    var vencido = diffMin < 0;
+    var dateNode = el('span', {
+      style: 'font-size:12.5px;' + (vencido && !opts.done ? ' color:var(--critical-ink); text-decoration:underline;' : ' color:var(--ink);')
+    }, [formatDate_(iso)]);
+    var wrap = el('div', {}, [dateNode]);
+    if (opts.done) return wrap;
+    var absMin = Math.abs(diffMin);
+    var h = Math.floor(absMin / 60), m = absMin % 60;
+    var duracao = (h > 0 ? h + ' h e ' : '') + m + ' min';
+    if (vencido) {
+      wrap.appendChild(el('div', { style: 'font-size:11px; font-weight:600; color:var(--critical-ink);' }, ['Expirou há ' + duracao]));
+    } else if (diffMin <= 24 * 60) {
+      wrap.appendChild(el('div', { style: 'font-size:11px; font-weight:600; color:var(--warning-ink);' }, ['Irá expirar em ' + duracao]));
+    }
+    return wrap;
+  }
+
+  /** Iniciais pro avatar do solicitante (primeiro + último nome). */
+  function initials_(name) {
+    var parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 0) return '?';
+    var first = parts[0].charAt(0);
+    var last = parts.length > 1 ? parts[parts.length - 1].charAt(0) : '';
+    return (first + last).toUpperCase();
+  }
+
   function ticketRow_(t, onClick) {
     var sState = slaState_(t);
+    var progress = slaProgress_(t);
     return el('div', { class: 'card ticket-row' + (sState === 'critical' ? ' overdue' : ''), onclick: onClick }, [
       el('div', { class: 'top-line' }, [
         el('span', { class: 'mono', style: 'font-size:11.5px; color:var(--ink-soft);' }, [t.protocol]),
+        // Categoria em destaque (pill própria, mesmo peso visual de
+        // prioridade/status) — antes era um texto pequeno perdido no meio
+        // da linha de meta-dados, fácil de passar batido.
+        el('span', { class: 'pill brand' }, [t.department]),
         el('span', { class: 'pill ' + PRIORITY_CLASS[t.priority] }, [PRIORITY_LABEL[t.priority] || t.priority]),
-        el('span', { class: 'pill ' + STATUS_CLASS[t.status] }, [STATUS_LABEL[t.status] || t.status]),
-        el('span', { class: 'pill ' + sState }, [slaLabel_(t)])
+        el('span', { class: 'pill ' + STATUS_CLASS[t.status] }, [STATUS_LABEL[t.status] || t.status])
       ]),
       el('div', { class: 'subject' }, [t.subject]),
       el('div', { class: 'meta' }, [
-        t.department + ' · Colaborador: ', el('b', {}, [t.requesterName]), ' · ',
-        t.assignedTo ? el('b', {}, ['Analista: ' + (t.assignedToName || t.assignedTo)]) : el('span', { style: 'font-style:italic;' }, ['sem analista vinculado'])
-      ])
+        'Colaborador: ', el('b', { style: 'color:var(--ink);' }, [t.requesterName]),
+        el('span', { style: 'margin:0 6px;' }, ['·']),
+        t.assignedTo
+          ? el('span', {}, ['Analista: ', el('b', { style: 'color:var(--brand-ink);' }, [t.assignedToName || t.assignedTo])])
+          : el('span', { style: 'font-style:italic;' }, ['sem analista vinculado'])
+      ]),
+      progress ? el('div', { style: 'margin-top:4px;' }, [progress]) : null
     ]);
   }
 
@@ -1085,21 +1154,35 @@
     }
 
     var c = detail.colaborador;
+    var ticketDone = t.status === 'resolvido' || t.status === 'encerrado';
     sideCol.appendChild(el('div', { class: 'card' }, [
-      el('h3', { style: 'margin:0 0 8px; font-size:13px;' }, ['Solicitante']),
-      el('p', { style: 'margin:0; font-weight:700;' }, [t.requesterName]),
-      el('p', { style: 'margin:0; font-size:11.5px; color:var(--ink-soft);' }, [t.requesterEmail]),
-      t.matricula ? el('p', { style: 'margin:0; font-size:11.5px; color:var(--ink-soft);' }, ['Matrícula ' + t.matricula]) : null,
+      el('h3', { style: 'margin:0 0 10px; font-size:13px;' }, ['Solicitante']),
+      el('div', { style: 'display:flex; align-items:center; gap:10px;' }, [
+        el('div', {
+          style: 'width:38px; height:38px; border-radius:50%; background:var(--brand-tint); color:var(--brand-ink); ' +
+            'display:flex; align-items:center; justify-content:center; font-weight:700; font-size:14px; flex-shrink:0;'
+        }, [initials_(t.requesterName)]),
+        el('div', {}, [
+          el('p', { style: 'margin:0; font-weight:700;' }, [t.requesterName]),
+          el('p', { style: 'margin:0; font-size:11.5px; color:var(--ink-soft);' }, [t.requesterEmail]),
+          t.matricula ? el('p', { style: 'margin:0; font-size:11px; color:var(--ink-soft);' }, ['Matrícula ' + t.matricula]) : null
+        ])
+      ]),
       // Dados vindos da aba Colaboradores (ADP) — só o analista vê, é pra
       // ajudar no atendimento (por exemplo, saber se é alguém recém
-      // admitido antes de responder um chamado de primeiro acesso).
-      (isAnalyst && c) ? el('div', { style: 'margin-top:6px; display:flex; flex-direction:column; gap:2px;' }, [
-        c.filial ? el('p', { style: 'margin:0; font-size:12.5px; color:var(--ink);' }, ['Filial: ', el('b', {}, [c.filial])]) : null,
-        c.celular ? el('p', { style: 'margin:0; font-size:12.5px; color:var(--ink);' }, ['Celular: ', el('b', {}, [c.celular])]) : null,
-        c.dataAdmissao ? el('p', { style: 'margin:0; font-size:12.5px; color:var(--ink);' }, ['Admissão: ', el('b', {}, [new Date(c.dataAdmissao).toLocaleDateString('pt-BR')])]) : null
+      // admitido antes de responder um chamado de primeiro acesso). Num
+      // painel com fundo levemente diferente, pra separar visualmente do
+      // que o próprio colaborador digitou na abertura.
+      (isAnalyst && c) ? el('div', { style: 'margin-top:10px; background:var(--paper); border-radius:8px; padding:8px 10px; display:flex; flex-direction:column; gap:4px;' }, [
+        c.filial ? el('p', { style: 'margin:0; font-size:12px; color:var(--ink);' }, ['🏢 Filial: ', el('b', {}, [c.filial])]) : null,
+        c.celular ? el('p', { style: 'margin:0; font-size:12px; color:var(--ink);' }, ['📱 Celular: ', el('b', {}, [c.celular])]) : null,
+        c.dataAdmissao ? el('p', { style: 'margin:0; font-size:12px; color:var(--ink);' }, ['📅 Admissão: ', el('b', {}, [new Date(c.dataAdmissao).toLocaleDateString('pt-BR')])]) : null
       ]) : null,
-      el('hr', { style: 'border:none; border-top:1px solid var(--line-soft); margin:8px 0;' }),
-      el('p', { style: 'margin:0; font-size:11.5px;' }, ['Prazo: ' + (t.slaDueAt ? formatDate_(t.slaDueAt) : '—')]),
+      el('hr', { style: 'border:none; border-top:1px solid var(--line-soft); margin:10px 0 8px;' }),
+      el('div', {}, [
+        el('p', { style: 'margin:0 0 2px; font-size:11px; color:var(--ink-soft); text-transform:uppercase; letter-spacing:.03em;' }, ['Prazo']),
+        formatDeadline_(t.slaDueAt, { done: ticketDone })
+      ]),
       isAnalyst ? buildStatusPriorityMini_(t, refresh) : null
     ]));
 
